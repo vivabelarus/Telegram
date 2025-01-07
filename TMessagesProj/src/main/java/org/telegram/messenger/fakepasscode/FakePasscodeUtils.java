@@ -1,18 +1,34 @@
 package org.telegram.messenger.fakepasscode;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.os.SystemClock;
 import android.text.TextUtils;
 
+import org.telegram.messenger.AppStartReceiver;
+import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.NotificationsController;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.fakepasscode.results.ActionsResult;
+import org.telegram.messenger.fakepasscode.results.RemoveChatsResult;
+import org.telegram.messenger.fakepasscode.results.TelegramMessageResult;
+import org.telegram.messenger.partisan.PartisanLog;
+import org.telegram.messenger.partisan.Utils;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tl.TL_stories;
 import org.telegram.ui.NotificationsSettingsActivity;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 
@@ -20,60 +36,46 @@ public class FakePasscodeUtils {
     public static FakePasscode getActivatedFakePasscode() {
         if (SharedConfig.fakePasscodeActivatedIndex > -1
                 && SharedConfig.fakePasscodeActivatedIndex < SharedConfig.fakePasscodes.size()) {
-            return SharedConfig.fakePasscodes.get(SharedConfig.fakePasscodeActivatedIndex);
-        } else {
-            return null;
+            FakePasscode fakePasscode = SharedConfig.fakePasscodes.get(SharedConfig.fakePasscodeActivatedIndex);
+            if (fakePasscode.activated) {
+                return fakePasscode;
+            }
         }
+        return null;
     }
 
     public static boolean isFakePasscodeActivated() {
-        return SharedConfig.fakePasscodeActivatedIndex != -1;
+        return getActivatedFakePasscode() != null;
     }
 
-    public static boolean checkMessage(int accountNum, TLRPC.Message message) {
-        return checkMessage(accountNum, message.dialog_id, message.from_id != null ? message.from_id.user_id : null, message.message, message.date);
+    private static ActionsResult getActivatedActionsResult() {
+        if (isFakePasscodeActivated()) {
+            return getActivatedFakePasscode().actionsResult.merge(SharedConfig.fakePasscodeActionsResult);
+        } else {
+            return SharedConfig.fakePasscodeActionsResult;
+        }
     }
 
-    public static boolean checkMessage(int accountNum, long dialogId, Long senderId, String message) {
-        return checkMessage(accountNum, dialogId, senderId, message, null);
+    public static ActionsResult getJustActivatedActionsResult() {
+        ActionsResult result = getActivatedActionsResult();
+        if (result != null && result.isJustActivated()) {
+            return result;
+        }
+        return null;
     }
 
-    public static boolean checkMessage(int accountNum, long dialogId, Long senderId, String message, Integer date) {
-        if (message != null) {
-            tryToActivatePasscodeByMessage(accountNum, senderId, message, date);
+    public static RemoveChatsResult getJustActivatedRemoveChatsResult(int accountNum) {
+        ActionsResult result = getActivatedActionsResult();
+        if (result != null && result.isJustActivated()) {
+            return result.removeChatsResults.get(accountNum);
         }
-        FakePasscode passcode = getActivatedFakePasscode();
-        if (passcode == null) {
-            return true;
-        }
-        return !passcode.needDeleteMessage(accountNum, dialogId);
-    }
-
-    private synchronized static void tryToActivatePasscodeByMessage(int accountNum, Long senderId, String message, Integer date) {
-        if (message.isEmpty() || senderId != null && UserConfig.getInstance(accountNum).clientUserId == senderId) {
-            return;
-        }
-        for (int i = 0; i < SharedConfig.fakePasscodes.size(); i++) {
-            FakePasscode passcode = SharedConfig.fakePasscodes.get(i);
-            if (passcode.activationMessage.isEmpty()) {
-                continue;
-            }
-            if (date != null && passcode.activationDate != null && date < passcode.activationDate) {
-                continue;
-            }
-            if (passcode.activationMessage.equals(message)) {
-                passcode.executeActions();
-                SharedConfig.fakePasscodeActivated(i);
-                SharedConfig.saveConfig();
-                break;
-            }
-        }
+        return null;
     }
 
     public static String getFakePhoneNumber(int accountNum) {
-        FakePasscode passcode = getActivatedFakePasscode();
-        if (passcode != null) {
-            String number = passcode.actionsResult.getFakePhoneNumber(accountNum);
+        ActionsResult actionsResult = getActivatedActionsResult();
+        if (actionsResult != null) {
+            String number = actionsResult.getFakePhoneNumber(accountNum);
             if (number != null) {
                 return number;
             }
@@ -92,27 +94,36 @@ public class FakePasscodeUtils {
 
     public static <T> List<T> filterItems(List<T> items, Optional<Integer> account, BiPredicate<T, ChatFilter> filter) {
         FakePasscode passcode = getActivatedFakePasscode();
-        if (passcode == null || items == null) {
+        ActionsResult actionsResult = getActivatedActionsResult();
+        if ((passcode == null && actionsResult == null) || items == null || (passcode != null && !passcode.activated)) {
             return items;
         }
         List<T> filteredItems = items;
-        for (Map.Entry<Integer, RemoveChatsResult> pair : passcode.actionsResult.removeChatsResults.entrySet()) {
-            Integer accountNum = pair.getKey();
-            if (accountNum != null && (!account.isPresent() || accountNum.equals(account.get()))) {
-                filteredItems = filteredItems.stream().filter(i -> filter.test(i, pair.getValue())).collect(Collectors.toList());
-            }
+        for (ChatFilter chatFilter : actionsResult.getChatFilters(account)) {
+            filteredItems = filteredItems.stream().filter(i -> filter.test(i, chatFilter)).collect(Collectors.toList());
         }
-        for (AccountActions actions : passcode.getFilteredAccountActions()) {
-            Integer accountNum = actions.getAccountNum();
-            if (accountNum != null && (!account.isPresent() ||  accountNum.equals(account.get()))) {
-                filteredItems = filteredItems.stream().filter(i -> filter.test(i, actions.getRemoveChatsAction())).collect(Collectors.toList());
+        if (passcode != null) {
+            for (AccountActions actions : passcode.getFilteredAccountActions()) {
+                Integer accountNum = actions.getAccountNum();
+                if (accountNum != null && (!account.isPresent() ||  accountNum.equals(account.get()))) {
+                    filteredItems = filteredItems.stream().filter(i -> filter.test(i, actions.getRemoveChatsAction())).collect(Collectors.toList());
+                }
             }
         }
         return new FilteredArrayList<>(filteredItems, items);
     }
 
     public static List<TLRPC.Dialog> filterDialogs(List<TLRPC.Dialog> dialogs, Optional<Integer> account) {
-        return filterItems(dialogs, account, (dialog, filter) -> !filter.isHideChat(Utils.getChatOrUserId(dialog.id, account)));
+        List<TLRPC.Dialog> filteredDialogs = filterItems(dialogs, account, (dialog, filter) -> !filter.isHideChat(Utils.getChatOrUserId(dialog.id, account)));
+        if (!isFakePasscodeActivated() || !account.isPresent()) {
+            return filteredDialogs;
+        }
+
+        MessagesStorage messagesStorage = MessagesStorage.getInstance(account.get());
+        List<TLRPC.Dialog> filteredDialogsWithoutEncryptedGroups = filteredDialogs.stream()
+                .filter(d -> !messagesStorage.isEncryptedGroup(d.id))
+                .collect(Collectors.toList());
+        return new FilteredArrayList<>(filteredDialogsWithoutEncryptedGroups, filteredDialogs);
     }
 
     public static List<TLRPC.TL_topPeer> filterHints(List<TLRPC.TL_topPeer> hints, int account) {
@@ -123,35 +134,31 @@ public class FakePasscodeUtils {
     }
 
     public static List<TLRPC.Peer> filterPeers(List<TLRPC.Peer> peers, int account) {
-        return filterItems(peers, Optional.of(account), (peer, action) -> !isHidePeer(peer, action));
+        return filterItems(peers, Optional.of(account), (peer, filter) -> !filter.isHidePeer(peer));
     }
 
     public static List<TLRPC.TL_sendAsPeer> filterSendAsPeers(List<TLRPC.TL_sendAsPeer> peers, int account) {
-        return filterItems(peers, Optional.of(account), (peer, action) -> !isHidePeer(peer.peer, action));
+        return filterItems(peers, Optional.of(account), (peer, filter) -> !filter.isHidePeer(peer.peer));
     }
 
     public static boolean isHidePeer(TLRPC.Peer peer, int account) {
         FakePasscode passcode = getActivatedFakePasscode();
-        if (passcode == null || peer == null) {
+        ActionsResult actionsResult = getActivatedActionsResult();
+        if ((passcode == null && actionsResult == null) || peer == null) {
             return false;
         }
-        RemoveChatsResult result = passcode.actionsResult.getRemoveChatsResult(account);
-        if (result != null && isHidePeer(peer, result)) {
+        if (actionsResult.getChatFilters(Optional.of(account)).stream().anyMatch(filter -> filter.isHidePeer(peer))) {
             return true;
         }
-        for (AccountActions actions : passcode.getFilteredAccountActions()) {
-            Integer accountNum = actions.getAccountNum();
-            if (accountNum != null && accountNum.equals(account)) {
-                return isHidePeer(peer, actions.getRemoveChatsAction());
+        if (passcode != null) {
+            for (AccountActions actions : passcode.getFilteredAccountActions()) {
+                Integer accountNum = actions.getAccountNum();
+                if (accountNum != null && accountNum.equals(account)) {
+                    return actions.getRemoveChatsAction().isHidePeer(peer);
+                }
             }
         }
         return false;
-    }
-
-    private static boolean isHidePeer(TLRPC.Peer peer, ChatFilter filter) {
-        return filter.isHideChat(peer.chat_id)
-                || filter.isHideChat(peer.channel_id)
-                || filter.isHideChat(peer.user_id);
     }
 
     public static List<TLRPC.TL_contact> filterContacts(List<TLRPC.TL_contact> contacts, int account) {
@@ -168,45 +175,72 @@ public class FakePasscodeUtils {
 
     public static List<NotificationsSettingsActivity.NotificationException> filterNotificationExceptions(
             List<NotificationsSettingsActivity.NotificationException> exceptions, int account) {
+        if (exceptions == null) {
+            return null;
+        }
         return filterItems(exceptions, Optional.of(account), (e, filter) -> !filter.isHideChat(e.did));
+    }
+
+    public static List<TL_stories.PeerStories> filterStories(List<TL_stories.PeerStories> stories, int account) {
+        if (stories == null) {
+            return null;
+        }
+        return filterItems(stories, Optional.of(account), (s, filter) -> !filter.isHidePeer(s.peer));
     }
 
     public static boolean isHideChat(long chatId, int account) {
         FakePasscode passcode = getActivatedFakePasscode();
-        if (passcode == null) {
+        ActionsResult actionsResult = getActivatedActionsResult();
+        if (passcode == null && actionsResult == null) {
             return false;
         }
-        RemoveChatsResult result = passcode.actionsResult.getRemoveChatsResult(account);
-        if (result != null && result.isHideChat(chatId)) {
+        if (actionsResult.getChatFilters(Optional.of(account)).stream().anyMatch(filter -> filter.isHideChat(chatId))) {
             return true;
         }
-        AccountActions actions = passcode.getAccountActions(account);
-        return actions != null && actions.getRemoveChatsAction().isHideChat(chatId);
+        if (passcode != null) {
+            AccountActions actions = passcode.getAccountActions(account);
+            return actions != null && actions.getRemoveChatsAction().isHideChat(chatId);
+        } else {
+            return false;
+        }
     }
 
     public static boolean isHideFolder(int folderId, int account) {
         FakePasscode passcode = getActivatedFakePasscode();
-        if (passcode == null) {
+        ActionsResult actionsResult = getActivatedActionsResult();
+        if (passcode == null && actionsResult == null) {
             return false;
         }
-        RemoveChatsResult result = passcode.actionsResult.getRemoveChatsResult(account);
-        if (result != null && result.isHideFolder(folderId)) {
+        if (actionsResult.getChatFilters(Optional.of(account)).stream().anyMatch(filter -> filter.isHideFolder(folderId))) {
             return true;
         }
-        AccountActions actions = passcode.getAccountActions(account);
-        return actions != null && actions.getRemoveChatsAction().isHideFolder(folderId);
+        if (passcode != null) {
+            AccountActions actions = passcode.getAccountActions(account);
+            return actions != null && actions.getRemoveChatsAction().isHideFolder(folderId);
+        } else {
+            return false;
+        }
     }
 
     public static boolean isHideAccount(int account) {
+        return isHideAccount(account, false);
+    }
+
+    public static boolean isHideAccount(int account, boolean strictHiding) {
         FakePasscode passcode = getActivatedFakePasscode();
-        if (passcode == null) {
+        ActionsResult actionsResult = getActivatedActionsResult();
+        if (passcode == null && actionsResult == null) {
             return false;
         }
-        if (passcode.actionsResult.hiddenAccounts.contains(account)) {
+        if (actionsResult.isHideAccount(account, strictHiding)) {
             return true;
         }
-        AccountActions actions = passcode.getAccountActions(account);
-        return actions != null && actions.isHideAccount();
+        if (passcode != null) {
+            AccountActions actions = passcode.getAccountActions(account);
+            return actions != null && actions.isHideAccount(strictHiding);
+        } else {
+            return false;
+        }
     }
 
     public static boolean autoAddHidingsToAllFakePasscodes() {
@@ -256,31 +290,48 @@ public class FakePasscodeUtils {
     }
 
     public static boolean isHideMessage(int accountNum, Long dialogId, Integer messageId) {
+        return isHideMessage(accountNum, dialogId, messageId, false);
+    }
+
+    public static boolean isHideMessage(int accountNum, Long dialogId, Integer messageId, boolean strictHiding) {
         FakePasscode passcode = getActivatedFakePasscode();
-        if (passcode == null) {
+        ActionsResult actionsResult = getActivatedActionsResult();
+        if (passcode == null && actionsResult == null) {
             return false;
         }
 
-        RemoveChatsResult removeChatsResult = passcode.actionsResult.getRemoveChatsResult(accountNum);
-        if (removeChatsResult != null && removeChatsResult.isHideChat(dialogId)) {
+
+        if (actionsResult.getChatFilters(Optional.of(accountNum)).stream().anyMatch(filter -> filter.isHideChat(dialogId, strictHiding))) {
             return true;
         }
-        AccountActions actions = passcode.getAccountActions(accountNum);
-        if (actions != null) {
-            RemoveChatsAction removeChatsAction = passcode.getAccountActions(accountNum).getRemoveChatsAction();
-            boolean hideAccount = passcode.getAccountActions(accountNum).isHideAccount();
-            if (hideAccount || removeChatsAction.isHideChat(dialogId)) {
-                return true;
+        if (passcode != null) {
+            AccountActions actions = passcode.getAccountActions(accountNum);
+            if (actions != null) {
+                RemoveChatsAction removeChatsAction = passcode.getAccountActions(accountNum).getRemoveChatsAction();
+                boolean hideAccount = passcode.getAccountActions(accountNum).isHideAccount(strictHiding);
+                if (hideAccount || removeChatsAction.isHideChat(dialogId, strictHiding)) {
+                    return true;
+                }
             }
         }
 
         if (messageId != null) {
-            TelegramMessageResult telegramMessageResult = passcode.actionsResult.getTelegramMessageResult(accountNum);
+            TelegramMessageResult telegramMessageResult = actionsResult.getTelegramMessageResult(accountNum);
             if (telegramMessageResult != null && telegramMessageResult.isSosMessage(dialogId, messageId)) {
                 return true;
             }
         }
         return false;
+    }
+
+    public static boolean isSosMessage(int accountNum, Long dialogId, int messageId) {
+        ActionsResult actionsResult = getActivatedActionsResult();
+        if (!isFakePasscodeActivated() && actionsResult == null) {
+            return false;
+        }
+
+        TelegramMessageResult telegramMessageResult = actionsResult.getTelegramMessageResult(accountNum);
+        return telegramMessageResult != null && telegramMessageResult.isSosMessage(dialogId, messageId);
     }
 
     public static FakePasscode getFingerprintFakePasscode() {
@@ -298,5 +349,97 @@ public class FakePasscodeUtils {
             return false;
         }
         return passcode.accountActions.stream().anyMatch(AccountActions::isPreventStickersBulletin);
+    }
+
+    public static boolean isNeedSwitchAccount() {
+        if (!isFakePasscodeActivated()) {
+            return false;
+        }
+        boolean isCurrentAccountCorrect = false;
+        int accountIndex = 0;
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (UserConfig.getInstance(a).isClientActivated() && !FakePasscodeUtils.isHideAccount(a, false)) {
+                if (a == UserConfig.selectedAccount) {
+                    isCurrentAccountCorrect = true;
+                    break;
+                }
+                accountIndex++;
+                if (accountIndex >= UserConfig.getFakePasscodeMaxAccountCount()) {
+                    break;
+                }
+            }
+        }
+        return !isCurrentAccountCorrect;
+    }
+
+    private static boolean isFakePasscodeWithTimerExist() {
+        return SharedConfig.fakePasscodes.stream().anyMatch(f -> f.activateByTimerTime != null);
+    }
+
+    public static void updateLastPauseFakePasscodeTime() {
+        if (SharedConfig.lastPauseFakePasscodeTime == 0 && isFakePasscodeWithTimerExist()) {
+            SharedConfig.lastPauseFakePasscodeTime = SystemClock.elapsedRealtime() / 1000;
+        }
+    }
+
+    private static int getActivatePasscodeTimerDuration() {
+        FakePasscode activePasscode = getActivatedFakePasscode();
+        return activePasscode != null && activePasscode.activateByTimerTime != null
+                ? activePasscode.activateByTimerTime
+                : 0;
+    }
+
+    public static synchronized void tryActivateByTimer() {
+        try {
+            if (SharedConfig.lastPauseFakePasscodeTime == 0) {
+                return;
+            }
+            long uptime = SystemClock.elapsedRealtime() / 1000;
+            long duration = uptime - SharedConfig.lastPauseFakePasscodeTime;
+            List<FakePasscode> sortedPasscodes = SharedConfig.fakePasscodes.stream()
+                    .filter(p -> p.activateByTimerTime != null && getActivatePasscodeTimerDuration() < p.activateByTimerTime && p.activateByTimerTime <= duration)
+                    .sorted(Comparator.comparingLong(p -> p.activateByTimerTime))
+                    .collect(Collectors.toList());
+            if (!sortedPasscodes.isEmpty()) {
+                for (FakePasscode passcode : sortedPasscodes) {
+                    passcode.executeActions();
+                }
+                FakePasscode lastPasscode = sortedPasscodes.get(sortedPasscodes.size() - 1);
+                SharedConfig.fakePasscodeActivated(SharedConfig.fakePasscodes.indexOf(lastPasscode));
+                SharedConfig.saveConfig();
+            }
+        } catch (Exception ignore) {
+        }
+    }
+
+    public static void scheduleFakePasscodeTimer(Context context) {
+        try {
+            AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            Intent intent = new Intent(context, AppStartReceiver.class);
+            int flags = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0;
+            PendingIntent pintent = PendingIntent.getBroadcast(context, 0, intent, flags);
+            alarmManager.setRepeating(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + 60 * 1000, 5 * 60 * 1000, pintent);
+            InnerFakePasscodeTimer.schedule();
+        } catch (Exception ignore) {
+        }
+    }
+
+    public static void hideFakePasscodeTraces() {
+        Utils.updateMessagesPreview();
+    }
+
+    public static long getMessageDialogId(TLRPC.Message message) {
+        if (message.dialog_id != 0) {
+            return message.dialog_id;
+        } else if (message.from_id != null) {
+            if (message.from_id instanceof TLRPC.TL_peerUser) {
+                return message.from_id.user_id;
+            } else if (message.from_id instanceof TLRPC.TL_peerChannel) {
+                return -message.from_id.channel_id;
+            } else if (message.from_id instanceof TLRPC.TL_peerChat) {
+                return -message.from_id.chat_id;
+            }
+        }
+        return 0;
     }
 }

@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.Locale;
 
 public class DatabaseMigrationHelper {
+
     public static int migrate(MessagesStorage messagesStorage, int version) throws Exception {
         SQLiteDatabase database = messagesStorage.getDatabase();
         if (version < 4) {
@@ -1241,9 +1242,301 @@ public class DatabaseMigrationHelper {
             database.executeFast("PRAGMA user_version = 114").stepThis().dispose();
             version = 114;
         }
+        if (version == 114) {
+            database.executeFast("CREATE TABLE bot_keyboard_topics(uid INTEGER, tid INTEGER, mid INTEGER, info BLOB, PRIMARY KEY(uid, tid))").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS bot_keyboard_topics_idx_mid_v2 ON bot_keyboard_topics(mid, uid, tid);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 115").stepThis().dispose();
+            version = 115;
+        }
+        if (version == 115) {
+            database.executeFast("CREATE INDEX IF NOT EXISTS idx_to_reply_messages_v2 ON messages_v2(reply_to_message_id, mid);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS idx_to_reply_scheduled_messages_v2 ON scheduled_messages_v2(reply_to_message_id, mid);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS idx_to_reply_messages_topics ON messages_topics(reply_to_message_id, mid);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 117").stepThis().dispose();
+            version = 117;
+        }
+
+        if (version == 116 || version == 117 || version == 118) {
+            database.executeFast("DROP TABLE IF EXISTS stories").stepThis().dispose();
+            database.executeFast("DROP TABLE IF EXISTS stories_counter").stepThis().dispose();
+
+            database.executeFast("CREATE TABLE stories (dialog_id INTEGER, story_id INTEGER, data BLOB, local_path TEXT, local_thumb_path TEXT, PRIMARY KEY (dialog_id, story_id));").stepThis().dispose();
+            database.executeFast("CREATE TABLE stories_counter (dialog_id INTEGER PRIMARY KEY, count INTEGER, max_read INTEGER);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 119").stepThis().dispose();
+            messagesStorage.getMessagesController().getStoriesController().cleanup();
+            version = 119;
+        }
+
+        if (version == 119) {
+            database.executeFast("ALTER TABLE messages_v2 ADD COLUMN reply_to_story_id INTEGER default 0").stepThis().dispose();
+            database.executeFast("ALTER TABLE messages_topics ADD COLUMN reply_to_story_id INTEGER default 0").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 120").stepThis().dispose();
+            version = 120;
+        }
+
+        if (version == 120) {
+            database.executeFast("CREATE TABLE profile_stories (dialog_id INTEGER, story_id INTEGER, data BLOB, PRIMARY KEY(dialog_id, story_id));").stepThis().dispose();
+            database.executeFast("CREATE TABLE archived_stories (story_id INTEGER PRIMARY KEY, data BLOB);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 121").stepThis().dispose();
+            version = 121;
+        }
+
+        if (version == 121) {
+            database.executeFast("CREATE TABLE story_drafts (id INTEGER PRIMARY KEY, date INTEGER, data BLOB);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 122").stepThis().dispose();
+            version = 122;
+        }
+
+        if (version == 122) {
+            database.executeFast("ALTER TABLE chat_settings_v2 ADD COLUMN participants_count INTEGER default 0").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 123").stepThis().dispose();
+            version = 123;
+        }
+
+        if (version == 123) {
+            database.executeFast("CREATE TABLE story_pushes (uid INTEGER PRIMARY KEY, minId INTEGER, maxId INTEGER, date INTEGER, localName TEXT);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 124").stepThis().dispose();
+            version = 124;
+        }
+
+        if (version == 124) {
+            database.executeFast("DROP TABLE IF EXISTS story_pushes;").stepThis().dispose();
+            database.executeFast("CREATE TABLE story_pushes (uid INTEGER, sid INTEGER, date INTEGER, localName TEXT, PRIMARY KEY(uid, sid));").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 125").stepThis().dispose();
+            version = 125;
+        }
+
+        if (version == 125) {
+            database.executeFast("ALTER TABLE story_pushes ADD COLUMN flags INTEGER default 0").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 126").stepThis().dispose();
+            version = 126;
+        }
+
+        if (version == 126) {
+            database.executeFast("ALTER TABLE story_pushes ADD COLUMN expire_date INTEGER default 0").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 127").stepThis().dispose();
+            version = 127;
+        }
+
+        if (version == 127) {
+            database.executeFast("ALTER TABLE stories ADD COLUMN custom_params BLOB default NULL").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 128").stepThis().dispose();
+            version = 128;
+        }
+
+        if (version == 128) {
+            database.executeFast("ALTER TABLE story_drafts ADD COLUMN type INTEGER default 0").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 129").stepThis().dispose();
+            version = 129;
+        }
+
+        if (version == 129) {
+            database.executeFast("CREATE INDEX IF NOT EXISTS stickers_featured_emoji_index ON stickers_featured(emoji);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 130").stepThis().dispose();
+            version = 130;
+        }
+
+        if (version == 130) {
+            database.executeFast("DROP TABLE archived_stories").stepThis().dispose();
+            database.executeFast("ALTER TABLE profile_stories ADD COLUMN type INTEGER default 0").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 131").stepThis().dispose();
+            version = 131;
+        }
+
+        if (version == 131) {
+            database.executeFast("ALTER TABLE stories DROP COLUMN local_path").stepThis().dispose();
+            database.executeFast("ALTER TABLE stories DROP COLUMN local_thumb_path").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 132").stepThis().dispose();
+            version = 132;
+        }
+
+        if (version == 132) {
+            database.executeFast("CREATE TABLE unconfirmed_auth (data BLOB);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 133").stepThis().dispose();
+            version = 133;
+        }
+
+        if (version == 133) {
+            database.executeFast("ALTER TABLE unread_push_messages ADD COLUMN topicId INTEGER default 0").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 134").stepThis().dispose();
+            version = 134;
+        }
+
+        if (version == 134) {
+            database.executeFast("DROP TABLE user_photos").stepThis().dispose();
+            database.executeFast("CREATE TABLE dialog_photos(uid INTEGER, id INTEGER, num INTEGER, data BLOB, PRIMARY KEY (uid, id))").stepThis().dispose();
+            database.executeFast("CREATE TABLE dialog_photos_count(uid INTEGER PRIMARY KEY, count INTEGER)").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 135").stepThis().dispose();
+            version = 135;
+        }
+
+        if (version == 135) {
+//            database.executeFast("DROP TABLE stickersets").stepThis().dispose();
+            database.executeFast("CREATE TABLE stickersets2(id INTEGER PRIMATE KEY, data BLOB, hash INTEGER, date INTEGER);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS stickersets2_id_index ON stickersets2(id);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 136").stepThis().dispose();
+            version = 136;
+        }
+
+        if (version == 136) {
+            database.executeFast("CREATE TABLE saved_dialogs(did INTEGER PRIMARY KEY, date INTEGER, last_mid INTEGER, pinned INTEGER, flags INTEGER, folder_id INTEGER, last_mid_group INTEGER, count INTEGER)").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS date_idx_dialogs ON saved_dialogs(date);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS last_mid_idx_dialogs ON saved_dialogs(last_mid);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS folder_id_idx_dialogs ON saved_dialogs(folder_id);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS flags_idx_dialogs ON saved_dialogs(flags);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 137").stepThis().dispose();
+            version = 137;
+        }
+
+        if (version == 137) {
+            database.executeFast("ALTER TABLE unread_push_messages ADD COLUMN is_reaction INTEGER default 0").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 138").stepThis().dispose();
+            version = 138;
+        }
+
+        if (version == 138 || version == 139 || version == 140 || version == 141) {
+            database.executeFast("DROP TABLE IF EXISTS tag_message_id;").stepThis().dispose();
+            database.executeFast("CREATE TABLE tag_message_id(mid INTEGER, topic_id INTEGER, tag INTEGER, text TEXT);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS tag_idx_tag_message_id ON tag_message_id(tag);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS tag_text_idx_tag_message_id ON tag_message_id(tag, text);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS tag_topic_idx_tag_message_id ON tag_message_id(topic_id, tag);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS tag_topic_text_idx_tag_message_id ON tag_message_id(topic_id, tag, text);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 142").stepThis().dispose();
+            version = 142;
+        }
+
+        if (version == 142) {
+            database.executeFast("DROP TABLE IF EXISTS saved_reaction_tags;").stepThis().dispose();
+            database.executeFast("CREATE TABLE saved_reaction_tags (topic_id INTEGER PRIMARY KEY, data BLOB);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 143").stepThis().dispose();
+            version = 143;
+        }
+
+        if (version == 143) {
+            database.executeFast("ALTER TABLE dialog_filter ADD COLUMN color INTEGER default -1").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 144").stepThis().dispose();
+            version = 144;
+        }
+
+        if (version == 144) {
+//            database.executeFast("CREATE TABLE business_messages(mid INTEGER, type INTEGER, topic_id INTEGER, send_state INTEGER, date INTEGER, data BLOB, ttl INTEGER, replydata BLOB, reply_to_message_id INTEGER, PRIMARY KEY(mid, type))").stepThis().dispose();
+//            database.executeFast("CREATE INDEX IF NOT EXISTS send_state_idx_business_messages ON business_messages(mid, send_state, date);").stepThis().dispose();
+//            database.executeFast("CREATE INDEX IF NOT EXISTS type_topic_date_idx_business_messages ON business_messages(type, topic_id, date);").stepThis().dispose();
+//            database.executeFast("CREATE INDEX IF NOT EXISTS reply_to_idx_business_messages ON business_messages(mid, reply_to_message_id);").stepThis().dispose();
+//            database.executeFast("CREATE INDEX IF NOT EXISTS idx_to_reply_business_messages ON business_messages(reply_to_message_id, mid);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 145").stepThis().dispose();
+            version = 145;
+        }
+
+        if (version == 145) {
+            database.executeFast("CREATE TABLE business_replies(topic_id INTEGER PRIMARY KEY, name TEXT, order_value INTEGER);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 146").stepThis().dispose();
+            version = 146;
+        }
+
+        if (version == 146) {
+            database.executeFast("CREATE TABLE quick_replies_messages(mid INTEGER, topic_id INTEGER, send_state INTEGER, date INTEGER, data BLOB, ttl INTEGER, replydata BLOB, reply_to_message_id INTEGER, PRIMARY KEY(mid, topic_id))").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS send_state_idx_quick_replies_messages ON quick_replies_messages(mid, send_state, date);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS topic_date_idx_quick_replies_messages ON quick_replies_messages(topic_id, date);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS reply_to_idx_quick_replies_messages ON quick_replies_messages(mid, reply_to_message_id);").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS idx_to_reply_quick_replies_messages ON quick_replies_messages(reply_to_message_id, mid);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 147").stepThis().dispose();
+            version = 147;
+        }
+
+        if (version == 147) {
+            database.executeFast("ALTER TABLE business_replies ADD COLUMN count INTEGER default 0").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 148").stepThis().dispose();
+            version = 148;
+        }
+
+        if (version == 148) {
+            database.executeFast("ALTER TABLE topics ADD COLUMN edit_date INTEGER default 0").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 149").stepThis().dispose();
+            version = 149;
+        }
+
+        if (version == 149) {
+            database.executeFast("ALTER TABLE stickersets2 ADD COLUMN short_name TEXT;").stepThis().dispose();
+            database.executeFast("CREATE INDEX IF NOT EXISTS stickersets2_id_short_name ON stickersets2(id, short_name);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 150").stepThis().dispose();
+            version = 150;
+        }
+
+        if (version == 150) {
+            database.executeFast("CREATE TABLE business_links(data BLOB, order_value INTEGER);").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 151").stepThis().dispose();
+            version = 151;
+        }
+
+        if (version == 151) {
+            database.executeFast("ALTER TABLE profile_stories ADD COLUMN seen INTEGER default 0;").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 152").stepThis().dispose();
+            version = 152;
+        }
+
+        if (version == 152) {
+            database.executeFast("ALTER TABLE profile_stories ADD COLUMN pin INTEGER default 0;").stepThis().dispose();
+
+            database.executeFast("PRAGMA user_version = 153").stepThis().dispose();
+            version = 153;
+        }
+
+        if (version == 153) {
+            database.executeFast("CREATE TABLE effects(data BLOB)").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 154").stepThis().dispose();
+            version = 154;
+        }
+
+        if (version == 154) {
+            database.executeFast("CREATE TABLE fact_checks(hash INTEGER PRIMARY KEY, data BLOB, expires INTEGER);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 155").stepThis().dispose();
+            version = 155;
+        }
+
+        if (version == 155) {
+            database.executeFast("CREATE TABLE popular_bots(uid INTEGER PRIMARY KEY, time INTEGER, offset TEXT);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 156").stepThis().dispose();
+            version = 156;
+        }
+
+        if (version == 156 || version == 157) {
+            database.executeFast("CREATE TABLE star_gifts2(id INTEGER PRIMARY KEY, data BLOB, hash INTEGER, time INTEGER);").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 158").stepThis().dispose();
+            version = 158;
+        }
+
+        if (version == 158) {
+            database.executeFast("DELETE FROM star_gifts2").stepThis().dispose();
+            database.executeFast("ALTER TABLE star_gifts2 ADD COLUMN pos INTEGER default 0;").stepThis().dispose();
+            database.executeFast("PRAGMA user_version = 159").stepThis().dispose();
+            version = 159;
+        }
+
         return version;
     }
-
 
     public static boolean recoverDatabase(File oldDatabaseFile, File oldDatabaseWall, File oldDatabaseShm, int currentAccount) {
         File filesDir = ApplicationLoader.getFilesDirFixed();

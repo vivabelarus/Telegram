@@ -20,16 +20,17 @@ import android.view.ViewConfiguration;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Cells.BaseCell;
 
 import java.util.ArrayList;
 
 public class CanvasButton {
 
-    Path drawingPath;
+    CornerPath drawingPath;
     ArrayList<RectF> drawingRects = new ArrayList<>();
     int usingRectCount;
     boolean buttonPressed;
-    RippleDrawable selectorDrawable;
+    Drawable selectorDrawable;
     private final static int[] pressedState = new int[]{android.R.attr.state_enabled, android.R.attr.state_pressed};
 
     private final View parent;
@@ -95,7 +96,8 @@ public class CanvasButton {
                     new int[][]{StateSet.WILD_CARD},
                     new int[]{Theme.getColor(Theme.key_listSelector) & 0x19ffffff}
             );
-            selectorDrawable = new RippleDrawable(colorStateList, null, maskDrawable);
+            selectorDrawable = new BaseCell.RippleDrawableSafe(colorStateList, null, maskDrawable);
+            selectorDrawable.setCallback(parent);
         }
     }
 
@@ -111,7 +113,7 @@ public class CanvasButton {
         if (usingRectCount > 1) {
             if (!pathCreated) {
                 if (drawingPath == null) {
-                    drawingPath = new Path();
+                    drawingPath = new CornerPath(2);
                 } else {
                     drawingPath.rewind();
                 }
@@ -141,6 +143,7 @@ public class CanvasButton {
                         selectorDrawable.setBounds(left, top, right, bottom);
                     }
                 }
+                drawingPath.closeRects();
                 pathCreated = true;
             }
             paint.setPathEffect(pathEffect);
@@ -256,7 +259,9 @@ public class CanvasButton {
     public void setRoundRadius(int radius) {
         roundRadius = radius;
         pathEffect = new CornerPathEffect(radius);
-        maskPaint.setPathEffect(new CornerPathEffect(radius));
+        if (maskPaint != null) {
+            maskPaint.setPathEffect(new CornerPathEffect(radius));
+        }
     }
 
     public void cancelRipple() {

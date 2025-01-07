@@ -194,7 +194,7 @@ public class TrendingStickersLayout extends FrameLayout implements NotificationC
                 searchAdapter.search(text);
             }
         };
-        searchView.setHint(LocaleController.getString("SearchTrendingStickersHint", R.string.SearchTrendingStickersHint));
+        searchView.setHint(LocaleController.getString(R.string.SearchTrendingStickersHint));
         searchLayout.addView(searchView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP));
 
         listView = new RecyclerListView(context) {
@@ -460,7 +460,7 @@ public class TrendingStickersLayout extends FrameLayout implements NotificationC
         } else {
             stickersAlertDelegate = null;
         }
-        final StickersAlert stickersAlert = new StickersAlert(getContext(), parentFragment, inputStickerSet, null, stickersAlertDelegate, resourcesProvider);
+        final StickersAlert stickersAlert = new StickersAlert(getContext(), parentFragment, inputStickerSet, null, stickersAlertDelegate, resourcesProvider, false);
         stickersAlert.setShowTooltipWhenToggle(false);
         stickersAlert.setInstallDelegate(new StickersAlert.StickersAlertInstallDelegate() {
             @Override
@@ -692,7 +692,7 @@ public class TrendingStickersLayout extends FrameLayout implements NotificationC
             View view = null;
             switch (viewType) {
                 case 0:
-                    StickerEmojiCell stickerCell = new StickerEmojiCell(context, false) {
+                    StickerEmojiCell stickerCell = new StickerEmojiCell(context, false, resourcesProvider) {
                         public void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                             super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(82), MeasureSpec.EXACTLY));
                         }
@@ -763,7 +763,7 @@ public class TrendingStickersLayout extends FrameLayout implements NotificationC
                     bindStickerSetCell(holder.itemView, position, false);
                     break;
                 case 4:
-                    ((GraySectionCell) holder.itemView).setText(LocaleController.getString("OtherStickers", R.string.OtherStickers));
+                    ((GraySectionCell) holder.itemView).setText(LocaleController.getString(R.string.OtherStickers));
                     break;
             }
         }
@@ -1001,8 +1001,7 @@ public class TrendingStickersLayout extends FrameLayout implements NotificationC
         }
     }
 
-    private int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+    private int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 }

@@ -3,14 +3,16 @@ package org.telegram.messenger;
 import android.view.Window;
 import android.view.WindowManager;
 
+import org.telegram.messenger.fakepasscode.FakePasscodeUtils;
+
 import java.util.HashMap;
 
 public class FlagSecureReason {
 
     private static HashMap<Window, Integer> currentSecureReasons;
 
-    private Window window;
-    private FlagSecureCondition condition;
+    private final Window window;
+    private final FlagSecureCondition condition;
 
     public FlagSecureReason(Window window, FlagSecureCondition condition) {
         this.window = window;
@@ -65,16 +67,21 @@ public class FlagSecureReason {
         }
 
         if (isSecuredNow(window)) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            if (!SharedConfig.forceAllowScreenshots) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            } else {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            }
         } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            if (FakePasscodeUtils.isFakePasscodeActivated() || SharedConfig.allowScreenCapture) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
+            }
         }
     }
 
     public static boolean isSecuredNow(Window window) {
         return currentSecureReasons != null && currentSecureReasons.get(window) != null;
     }
-
 
     public interface FlagSecureCondition {
         boolean run();

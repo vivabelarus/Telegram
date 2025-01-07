@@ -8,10 +8,15 @@
 
 package org.telegram.messenger;
 
+import android.text.TextUtils;
+
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.Components.AvatarDrawable;
 import org.telegram.ui.Components.BackupImageView;
+
+import java.util.ArrayList;
+import java.util.HashSet;
 
 public class DialogObject {
 
@@ -115,7 +120,7 @@ public class DialogObject {
         if (dialog instanceof TLRPC.User) {
             TLRPC.User user = (TLRPC.User) dialog;
             if (UserObject.isReplyUser(user)) {
-                title = LocaleController.getString("RepliesTitle", R.string.RepliesTitle);
+                title = LocaleController.getString(R.string.RepliesTitle);
                 if (avatarDrawable != null) {
                     avatarDrawable.setAvatarType(AvatarDrawable.AVATAR_TYPE_REPLIES);
                 }
@@ -123,7 +128,7 @@ public class DialogObject {
                     imageReceiver.setForUserOrChat(null, avatarDrawable);
                 }
             } else if (UserObject.isUserSelf(user)) {
-                title = LocaleController.getString("SavedMessages", R.string.SavedMessages);
+                title = LocaleController.getString(R.string.SavedMessages);
                 if (avatarDrawable != null) {
                     avatarDrawable.setAvatarType(AvatarDrawable.AVATAR_TYPE_SAVED);
                 }
@@ -133,7 +138,7 @@ public class DialogObject {
             } else {
                 title = UserObject.getUserName(user, accountNum);
                 if (avatarDrawable != null) {
-                    avatarDrawable.setInfo(user, accountNum);
+                    avatarDrawable.setInfo(accountNum, user);
                 }
                 if (imageReceiver != null) {
                     imageReceiver.setForUserOrChat(dialog, avatarDrawable);
@@ -143,7 +148,7 @@ public class DialogObject {
             TLRPC.Chat chat = (TLRPC.Chat) dialog;
             title = UserConfig.getChatTitleOverride(accountNum, chat);
             if (avatarDrawable != null) {
-                avatarDrawable.setInfo(chat, accountNum);
+                avatarDrawable.setInfo(accountNum, chat);
             }
             if (imageReceiver != null) {
                 imageReceiver.setForUserOrChat(dialog, avatarDrawable);
@@ -165,10 +170,148 @@ public class DialogObject {
 
     public static String getPublicUsername(TLObject dialog) {
         if (dialog instanceof TLRPC.Chat) {
-            return ChatObject.getPublicUsername((TLRPC.Chat) dialog);
+            TLRPC.Chat chat = (TLRPC.Chat) dialog;
+            return getPublicUsername(chat.username, chat.usernames, false);
         } else if (dialog instanceof TLRPC.User) {
-            return UserObject.getPublicUsername((TLRPC.User) dialog);
+            TLRPC.User user = (TLRPC.User) dialog;
+            return getPublicUsername(user.username, user.usernames, false);
         }
         return null;
     }
+
+    public static String getPublicUsername(TLObject dialog, String query) {
+        if (dialog instanceof TLRPC.Chat) {
+            TLRPC.Chat chat = (TLRPC.Chat) dialog;
+            return query == null ? getPublicUsername(chat.username, chat.usernames, false) : getSimilarPublicUsername(chat.username, chat.usernames, query);
+        } else if (dialog instanceof TLRPC.User) {
+            TLRPC.User user = (TLRPC.User) dialog;
+            return query == null ? getPublicUsername(user.username, user.usernames, false) : getSimilarPublicUsername(user.username, user.usernames, query);
+        }
+        return null;
+    }
+
+    public static String getPublicUsername(String username, ArrayList<TLRPC.TL_username> usernames, boolean editable) {
+        if (!TextUtils.isEmpty(username) && !editable) {
+            return username;
+        }
+        if (usernames != null) {
+            for (int i = 0; i < usernames.size(); ++i) {
+                TLRPC.TL_username u = usernames.get(i);
+                if (u != null && (u.active && !editable || u.editable) && !TextUtils.isEmpty(u.username)) {
+                    return u.username;
+                }
+            }
+        }
+        if (!TextUtils.isEmpty(username) && editable && (usernames == null || usernames.size() <= 0)) {
+            return username;
+        }
+        return null;
+    }
+
+    public static String getSimilarPublicUsername(String obj_username, ArrayList<TLRPC.TL_username> obj_usernames, String query) {
+        double bestSimilarity = -1;
+        String bestUsername = null;
+        if (obj_usernames != null) {
+            for (int i = 0; i < obj_usernames.size(); ++i) {
+                TLRPC.TL_username u = obj_usernames.get(i);
+                if (u != null && u.active && !TextUtils.isEmpty(u.username)) {
+                    double s = bestSimilarity < 0 ? 0 : similarity(u.username, query);
+                    if (s > bestSimilarity) {
+                        bestSimilarity = s;
+                        bestUsername = u.username;
+                    }
+                }
+            }
+        }
+        if (!TextUtils.isEmpty(obj_username)) {
+            double s = bestSimilarity < 0 ? 0 : similarity(obj_username, query);
+            if (s > bestSimilarity) {
+                bestSimilarity = s;
+                bestUsername = obj_username;
+            }
+        }
+        return bestUsername;
+    }
+
+    public static double similarity(String s1, String s2) {
+        String longer = s1, shorter = s2;
+        if (s1.length() < s2.length()) { // longer should always have greater length
+            longer = s2; shorter = s1;
+        }
+        int longerLength = longer.length();
+        if (longerLength == 0) { return 1.0; }
+        return (longerLength - editDistance(longer, shorter)) / (double) longerLength;
+    }
+
+    public static int editDistance(String s1, String s2) {
+        s1 = s1.toLowerCase();
+        s2 = s2.toLowerCase();
+
+        int[] costs = new int[s2.length() + 1];
+        for (int i = 0; i <= s1.length(); i++) {
+            int lastValue = i;
+            for (int j = 0; j <= s2.length(); j++) {
+                if (i == 0)
+                    costs[j] = j;
+                else {
+                    if (j > 0) {
+                        int newValue = costs[j - 1];
+                        if (s1.charAt(i - 1) != s2.charAt(j - 1))
+                            newValue = Math.min(Math.min(newValue, lastValue),
+                                    costs[j]) + 1;
+                        costs[j - 1] = lastValue;
+                        lastValue = newValue;
+                    }
+                }
+            }
+            if (i > 0)
+                costs[s2.length()] = lastValue;
+        }
+        return costs[s2.length()];
+    }
+
+    public static long getEmojiStatusDocumentId(TLRPC.EmojiStatus emojiStatus) {
+        if (MessagesController.getInstance(UserConfig.selectedAccount).premiumFeaturesBlocked()) {
+            return 0;
+        }
+        if (emojiStatus instanceof TLRPC.TL_emojiStatus) {
+            return ((TLRPC.TL_emojiStatus) emojiStatus).document_id;
+        } else if (emojiStatus instanceof TLRPC.TL_emojiStatusUntil && ((TLRPC.TL_emojiStatusUntil) emojiStatus).until > (int) (System.currentTimeMillis() / 1000)) {
+            return ((TLRPC.TL_emojiStatusUntil) emojiStatus).document_id;
+        } else {
+            return 0;
+        }
+    }
+
+    public static int getEmojiStatusUntil(TLRPC.EmojiStatus emojiStatus) {
+        if (emojiStatus instanceof TLRPC.TL_emojiStatusUntil && ((TLRPC.TL_emojiStatusUntil) emojiStatus).until > (int) (System.currentTimeMillis() / 1000)) {
+            return ((TLRPC.TL_emojiStatusUntil) emojiStatus).until;
+        }
+        return 0;
+    }
+
+    public static boolean emojiStatusesEqual(TLRPC.EmojiStatus a, TLRPC.EmojiStatus b) {
+        return getEmojiStatusDocumentId(a) == getEmojiStatusDocumentId(b) && getEmojiStatusUntil(a) == getEmojiStatusUntil(b);
+    }
+
+    public static TLRPC.TL_username findUsername(String username, TLRPC.User user) {
+        if (user == null) return null;
+        return findUsername(username, user.usernames);
+    }
+
+    public static TLRPC.TL_username findUsername(String username, TLRPC.Chat chat) {
+        if (chat == null) return null;
+        return findUsername(username, chat.usernames);
+    }
+
+    public static TLRPC.TL_username findUsername(String username, ArrayList<TLRPC.TL_username> usernames) {
+        if (usernames == null) return null;
+        for (TLRPC.TL_username u : usernames) {
+            if (u != null && TextUtils.equals(u.username, username)) {
+                return u;
+            }
+        }
+        return null;
+    }
+
 }

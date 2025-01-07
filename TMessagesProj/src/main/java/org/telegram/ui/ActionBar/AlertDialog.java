@@ -12,6 +12,7 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
+import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -49,25 +50,29 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.Emoji;
 import org.telegram.messenger.FileLog;
+import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.Utilities;
+import org.telegram.ui.Components.AnimatedEmojiDrawable;
 import org.telegram.ui.Components.AnimatedFloat;
+import org.telegram.ui.Components.AttachableDrawable;
+import org.telegram.ui.Components.EffectsTextView;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.LineProgressView;
 import org.telegram.ui.Components.RLottieDrawable;
 import org.telegram.ui.Components.RLottieImageView;
 import org.telegram.ui.Components.RadialProgressView;
 import org.telegram.ui.Components.spoilers.SpoilersTextView;
-import org.telegram.ui.LaunchActivity;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -78,9 +83,13 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
     public static final int ALERT_TYPE_LOADING = 2;
     public static final int ALERT_TYPE_SPINNER = 3;
 
+    private int customWidth = -1;
+    private boolean customMaxHeight;
     private View customView;
+    private View bottomView;
+    private View aboveMessageView;
     private int customViewHeight = LayoutHelper.WRAP_CONTENT;
-    private TextView titleTextView;
+    private SpoilersTextView titleTextView;
     private TextView secondTitleTextView;
     private TextView subtitleTextView;
     private TextView messageTextView;
@@ -94,8 +103,9 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
     private boolean[] shadowVisibility = new boolean[2];
     private AnimatorSet[] shadowAnimation = new AnimatorSet[2];
     private int customViewOffset = 12;
+    private boolean withCancelDialog;
 
-    private String dialogButtonColorKey = Theme.key_dialogButton;
+    private int dialogButtonColorKey = Theme.key_dialogButton;
 
     private OnCancelListener onCancelListener;
 
@@ -105,6 +115,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
 
     private OnClickListener onClickListener;
     private OnDismissListener onDismissListener;
+    private Utilities.Callback<Runnable> overridenDissmissListener;
 
     private CharSequence[] items;
     private int[] itemIcons;
@@ -192,14 +203,14 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
         this.blurredBackground = blurBackground;
     }
 
-    private boolean supportsNativeBlur() {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && LaunchActivity.systemBlurEnabled;
+    protected boolean supportsNativeBlur() {
+        return false; // Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && LaunchActivity.systemBlurEnabled;
     }
 
     public void redPositive() {
         TextView button = (TextView) getButton(DialogInterface.BUTTON_POSITIVE);
         if (button != null) {
-            button.setTextColor(getThemedColor(Theme.key_dialogTextRed));
+            button.setTextColor(getThemedColor(Theme.key_text_RedBold));
         }
     }
 
@@ -213,7 +224,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             super(context);
             this.resourcesProvider = resourcesProvider;
 
-            setBackgroundDrawable(Theme.createSelectorDrawable(getThemedColor(Theme.key_dialogButtonSelector), 2));
+            setBackground(Theme.createSelectorDrawable(getThemedColor(Theme.key_dialogButtonSelector), 2));
             setPadding(AndroidUtilities.dp(23), 0, AndroidUtilities.dp(23), 0);
 
             imageView = new ImageView(context);
@@ -256,9 +267,8 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             }
         }
 
-        private int getThemedColor(String key) {
-            Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-            return color != null ? color : Theme.getColor(key);
+        protected int getThemedColor(int key) {
+            return Theme.getColor(key, resourcesProvider);
         }
     }
 
@@ -270,10 +280,11 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
         super(context, R.style.TransparentDialog);
         this.resourcesProvider = resourcesProvider;
 
-        blurredNativeBackground = supportsNativeBlur() && progressViewStyle == ALERT_TYPE_MESSAGE;
+        progressViewStyle = progressStyle;
         backgroundColor = getThemedColor(Theme.key_dialogBackground);
         final boolean isDark = AndroidUtilities.computePerceivedBrightness(backgroundColor) < 0.721f;
-        blurredBackground = blurredNativeBackground || !supportsNativeBlur() && SharedConfig.getDevicePerformanceClass() >= SharedConfig.PERFORMANCE_CLASS_HIGH && isDark;
+        blurredNativeBackground = supportsNativeBlur() && progressViewStyle == ALERT_TYPE_MESSAGE;
+        blurredBackground = (blurredNativeBackground || !supportsNativeBlur() && SharedConfig.getDevicePerformanceClass() >= SharedConfig.PERFORMANCE_CLASS_HIGH && LiteMode.isEnabled(LiteMode.FLAG_CHAT_BLUR)) && isDark;
 
         backgroundPaddings = new Rect();
         if (progressStyle != ALERT_TYPE_SPINNER || blurredBackground) {
@@ -282,12 +293,15 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             shadowDrawable.setColorFilter(new PorterDuffColorFilter(backgroundColor, PorterDuff.Mode.MULTIPLY));
             shadowDrawable.getPadding(backgroundPaddings);
         }
-
-        progressViewStyle = progressStyle;
+        withCancelDialog = progressViewStyle == ALERT_TYPE_SPINNER;
     }
+
+    private long shownAt;
 
     @Override
     public void show() {
+        if (!AndroidUtilities.isSafeToShow(getContext())) return;
+        dismissed = false;
         super.show();
         if (progressViewContainer != null && progressViewStyle == ALERT_TYPE_SPINNER) {
             progressViewContainer.setScaleX(0);
@@ -298,277 +312,294 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
                 .setDuration(190)
                 .start();
         }
+        shownAt = System.currentTimeMillis();
     }
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
+    public void setCancelDialog(boolean enable) {
+        withCancelDialog = enable;
+    }
 
-        LinearLayout containerView = new LinearLayout(getContext()) {
+    public class AlertDialogView extends LinearLayout {
+        public AlertDialogView(Context context) {
+            super(context);
+        }
 
-            private boolean inLayout;
+        private boolean inLayout;
 
-            @Override
-            public boolean onTouchEvent(MotionEvent event) {
-                if (progressViewStyle == ALERT_TYPE_SPINNER) {
-                    showCancelAlert();
-                    return false;
-                }
-                return super.onTouchEvent(event);
-            }
-
-            @Override
-            public boolean onInterceptTouchEvent(MotionEvent ev) {
-                if (progressViewStyle == ALERT_TYPE_SPINNER) {
-                    showCancelAlert();
-                    return false;
-                }
-                return super.onInterceptTouchEvent(ev);
-            }
-
-            @Override
-            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-                if (progressViewStyle == ALERT_TYPE_SPINNER) {
-                    progressViewContainer.measure(MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(86), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(86), MeasureSpec.EXACTLY));
-                    setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec));
-                } else {
-                    inLayout = true;
-                    int width = MeasureSpec.getSize(widthMeasureSpec);
-                    int height = MeasureSpec.getSize(heightMeasureSpec);
-                    int maxContentHeight;
-                    int availableHeight = maxContentHeight = height - getPaddingTop() - getPaddingBottom();
-                    int availableWidth = width - getPaddingLeft() - getPaddingRight();
-
-                    int childWidthMeasureSpec = MeasureSpec.makeMeasureSpec(availableWidth - AndroidUtilities.dp(48), MeasureSpec.EXACTLY);
-                    int childFullWidthMeasureSpec = MeasureSpec.makeMeasureSpec(availableWidth, MeasureSpec.EXACTLY);
-                    LayoutParams layoutParams;
-
-                    if (buttonsLayout != null) {
-                        int count = buttonsLayout.getChildCount();
-                        for (int a = 0; a < count; a++) {
-                            View child = buttonsLayout.getChildAt(a);
-                            if (child instanceof TextView) {
-                                TextView button = (TextView) child;
-                                button.setMaxWidth(AndroidUtilities.dp((availableWidth - AndroidUtilities.dp(24)) / 2));
-                            }
-                        }
-                        buttonsLayout.measure(childFullWidthMeasureSpec, heightMeasureSpec);
-                        layoutParams = (LayoutParams) buttonsLayout.getLayoutParams();
-                        availableHeight -= buttonsLayout.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
-                    }
-                    if (secondTitleTextView != null) {
-                        secondTitleTextView.measure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(childWidthMeasureSpec), MeasureSpec.AT_MOST), heightMeasureSpec);
-                    }
-                    if (titleTextView != null) {
-                        if (secondTitleTextView != null) {
-                            titleTextView.measure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(childWidthMeasureSpec) - secondTitleTextView.getMeasuredWidth() - AndroidUtilities.dp(8), MeasureSpec.EXACTLY), heightMeasureSpec);
-                        } else {
-                            titleTextView.measure(childWidthMeasureSpec, heightMeasureSpec);
-                        }
-                    }
-                    if (titleContainer != null) {
-                        titleContainer.measure(childWidthMeasureSpec, heightMeasureSpec);
-                        layoutParams = (LayoutParams) titleContainer.getLayoutParams();
-                        availableHeight -= titleContainer.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
-                    }
-                    if (subtitleTextView != null) {
-                        subtitleTextView.measure(childWidthMeasureSpec, heightMeasureSpec);
-                        layoutParams = (LayoutParams) subtitleTextView.getLayoutParams();
-                        availableHeight -= subtitleTextView.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
-                    }
-                    if (topImageView != null) {
-                        topImageView.measure(MeasureSpec.makeMeasureSpec(availableWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(topHeight), MeasureSpec.EXACTLY));
-                        availableHeight -= topImageView.getMeasuredHeight();
-                    }
-                    if (topView != null) {
-                        int w = width;
-                        int h;
-                        if (aspectRatio == 0) {
-                            float scale = w / 936.0f;
-                            h = (int) (354 * scale);
-                        } else {
-                            h = (int) (w * aspectRatio);
-                        }
-                        topView.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
-                        topView.getLayoutParams().height = h;
-                        availableHeight -= topView.getMeasuredHeight();
-                    }
-                    if (progressViewStyle == ALERT_TYPE_MESSAGE) {
-                        layoutParams = (LayoutParams) contentScrollView.getLayoutParams();
-
-                        if (customView != null) {
-                            layoutParams.topMargin = titleTextView == null && messageTextView.getVisibility() == GONE && items == null ? AndroidUtilities.dp(16) : 0;
-                            layoutParams.bottomMargin = buttonsLayout == null ? AndroidUtilities.dp(8) : 0;
-                        } else if (items != null) {
-                            layoutParams.topMargin = titleTextView == null && messageTextView.getVisibility() == GONE ? AndroidUtilities.dp(8) : 0;
-                            layoutParams.bottomMargin = AndroidUtilities.dp(8);
-                        } else if (messageTextView.getVisibility() == VISIBLE) {
-                            layoutParams.topMargin = titleTextView == null ? AndroidUtilities.dp(19) : 0;
-                            layoutParams.bottomMargin = AndroidUtilities.dp(20);
-                        }
-
-                        availableHeight -= layoutParams.bottomMargin + layoutParams.topMargin;
-                        contentScrollView.measure(childFullWidthMeasureSpec, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
-                        availableHeight -= contentScrollView.getMeasuredHeight();
-                    } else {
-                        if (progressViewContainer != null) {
-                            progressViewContainer.measure(childWidthMeasureSpec, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
-                            layoutParams = (LayoutParams) progressViewContainer.getLayoutParams();
-                            availableHeight -= progressViewContainer.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
-                        } else if (messageTextView != null) {
-                            messageTextView.measure(childWidthMeasureSpec, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
-                            if (messageTextView.getVisibility() != GONE) {
-                                layoutParams = (LayoutParams) messageTextView.getLayoutParams();
-                                availableHeight -= messageTextView.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
-                            }
-                        }
-                        if (lineProgressView != null) {
-                            lineProgressView.measure(childWidthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(4), MeasureSpec.EXACTLY));
-                            layoutParams = (LayoutParams) lineProgressView.getLayoutParams();
-                            availableHeight -= lineProgressView.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
-
-                            lineProgressViewPercent.measure(childWidthMeasureSpec, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
-                            layoutParams = (LayoutParams) lineProgressViewPercent.getLayoutParams();
-                            availableHeight -= lineProgressViewPercent.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
-                        }
-                    }
-
-                    setMeasuredDimension(width, maxContentHeight - availableHeight + getPaddingTop() + getPaddingBottom() - (topAnimationIsNew ? AndroidUtilities.dp(8) : 0));
-                    inLayout = false;
-
-                    if (lastScreenWidth != AndroidUtilities.displaySize.x) {
-                        AndroidUtilities.runOnUIThread(() -> {
-                            lastScreenWidth = AndroidUtilities.displaySize.x;
-                            final int calculatedWidth = AndroidUtilities.displaySize.x - AndroidUtilities.dp(56);
-                            int maxWidth;
-                            if (AndroidUtilities.isTablet()) {
-                                if (AndroidUtilities.isSmallTablet()) {
-                                    maxWidth = AndroidUtilities.dp(446);
-                                } else {
-                                    maxWidth = AndroidUtilities.dp(496);
-                                }
-                            } else {
-                                maxWidth = AndroidUtilities.dp(356);
-                            }
-
-                            Window window = getWindow();
-                            WindowManager.LayoutParams params = new WindowManager.LayoutParams();
-                            params.copyFrom(window.getAttributes());
-                            params.width = Math.min(maxWidth, calculatedWidth) + backgroundPaddings.left + backgroundPaddings.right;
-                            try {
-                                window.setAttributes(params);
-                            } catch (Throwable e) {
-                                FileLog.e(e);
-                            }
-                        });
-                    }
-                }
-            }
-
-            @Override
-            protected void onLayout(boolean changed, int l, int t, int r, int b) {
-                super.onLayout(changed, l, t, r, b);
-                if (progressViewStyle == ALERT_TYPE_SPINNER) {
-                    int x = (r - l - progressViewContainer.getMeasuredWidth()) / 2;
-                    int y = (b - t - progressViewContainer.getMeasuredHeight()) / 2;
-                    progressViewContainer.layout(x, y, x + progressViewContainer.getMeasuredWidth(), y + progressViewContainer.getMeasuredHeight());
-                } else if (contentScrollView != null) {
-                    if (onScrollChangedListener == null) {
-                        onScrollChangedListener = () -> {
-                            runShadowAnimation(0, titleTextView != null && contentScrollView.getScrollY() > scrollContainer.getTop());
-                            runShadowAnimation(1, buttonsLayout != null && contentScrollView.getScrollY() + contentScrollView.getHeight() < scrollContainer.getBottom());
-                            contentScrollView.invalidate();
-                        };
-                        contentScrollView.getViewTreeObserver().addOnScrollChangedListener(onScrollChangedListener);
-                    }
-                    onScrollChangedListener.onScrollChanged();
-                }
-
-                getLocationOnScreen(containerViewLocation);
-                if (blurMatrix != null && blurShader != null) {
-                    blurMatrix.reset();
-                    blurMatrix.postScale(8f, 8f);
-                    blurMatrix.postTranslate(-containerViewLocation[0], -containerViewLocation[1]);
-                    blurShader.setLocalMatrix(blurMatrix);
-                }
-            }
-
-            @Override
-            public void requestLayout() {
-                if (inLayout) {
-                    return;
-                }
-                super.requestLayout();
-            }
-
-            @Override
-            public boolean hasOverlappingRendering() {
+        @Override
+        public boolean onTouchEvent(MotionEvent event) {
+            if (withCancelDialog) {
+                showCancelAlert();
                 return false;
             }
+            return super.onTouchEvent(event);
+        }
 
-            private AnimatedFloat blurPaintAlpha = new AnimatedFloat(0, this);
-            private Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        @Override
+        public boolean onInterceptTouchEvent(MotionEvent ev) {
+            if (withCancelDialog) {
+                showCancelAlert();
+                return false;
+            }
+            return super.onInterceptTouchEvent(ev);
+        }
 
-            @Override
-            public void draw(Canvas canvas) {
-                if (blurredBackground && !blurredNativeBackground) {
-                    float r;
-                    if (progressViewStyle == ALERT_TYPE_SPINNER && progressViewContainer != null) {
-                        r = AndroidUtilities.dp(18);
-                        float w = progressViewContainer.getWidth() * progressViewContainer.getScaleX();
-                        float h = progressViewContainer.getHeight() * progressViewContainer.getScaleY();
-                        AndroidUtilities.rectTmp.set(
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            if (progressViewStyle == ALERT_TYPE_SPINNER) {
+                progressViewContainer.measure(MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(86), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(86), MeasureSpec.EXACTLY));
+                setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec));
+            } else {
+                inLayout = true;
+                int width = MeasureSpec.getSize(widthMeasureSpec);
+                int height = MeasureSpec.getSize(heightMeasureSpec);
+
+                if (customWidth > 0) {
+                    width = customWidth + backgroundPaddings.left + backgroundPaddings.right;
+                }
+
+                int maxContentHeight;
+                int availableHeight = maxContentHeight = height - getPaddingTop() - getPaddingBottom();
+                int availableWidth = width - getPaddingLeft() - getPaddingRight();
+
+                int childWidthMeasureSpec = MeasureSpec.makeMeasureSpec(availableWidth - AndroidUtilities.dp(48), MeasureSpec.EXACTLY);
+                int childFullWidthMeasureSpec = MeasureSpec.makeMeasureSpec(availableWidth, MeasureSpec.EXACTLY);
+                LayoutParams layoutParams;
+
+                if (buttonsLayout != null) {
+                    int count = buttonsLayout.getChildCount();
+                    for (int a = 0; a < count; a++) {
+                        View child = buttonsLayout.getChildAt(a);
+                        if (child instanceof TextView) {
+                            TextView button = (TextView) child;
+                            button.setMaxWidth(AndroidUtilities.dp((availableWidth - AndroidUtilities.dp(24)) / 2));
+                        }
+                    }
+                    buttonsLayout.measure(childFullWidthMeasureSpec, heightMeasureSpec);
+                    layoutParams = (LayoutParams) buttonsLayout.getLayoutParams();
+                    availableHeight -= buttonsLayout.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
+                }
+                if (secondTitleTextView != null) {
+                    secondTitleTextView.measure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(childWidthMeasureSpec), MeasureSpec.AT_MOST), heightMeasureSpec);
+                }
+                if (titleTextView != null) {
+                    if (secondTitleTextView != null) {
+                        titleTextView.measure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(childWidthMeasureSpec) - secondTitleTextView.getMeasuredWidth() - AndroidUtilities.dp(8), MeasureSpec.EXACTLY), heightMeasureSpec);
+                    } else {
+                        titleTextView.measure(childWidthMeasureSpec, heightMeasureSpec);
+                    }
+                }
+                if (titleContainer != null) {
+                    titleContainer.measure(childWidthMeasureSpec, heightMeasureSpec);
+                    layoutParams = (LayoutParams) titleContainer.getLayoutParams();
+                    availableHeight -= titleContainer.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
+                }
+                if (subtitleTextView != null) {
+                    subtitleTextView.measure(childWidthMeasureSpec, heightMeasureSpec);
+                    layoutParams = (LayoutParams) subtitleTextView.getLayoutParams();
+                    availableHeight -= subtitleTextView.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
+                }
+                if (topImageView != null) {
+                    topImageView.measure(MeasureSpec.makeMeasureSpec(availableWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(topHeight), MeasureSpec.EXACTLY));
+                    availableHeight -= topImageView.getMeasuredHeight();
+                }
+                if (topView != null) {
+                    int w = width;
+                    int h;
+                    if (aspectRatio == 0) {
+                        float scale = w / 936.0f;
+                        h = (int) (354 * scale);
+                    } else {
+                        h = (int) (w * aspectRatio);
+                    }
+                    topView.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY));
+                    topView.getLayoutParams().height = h;
+                    availableHeight -= topView.getMeasuredHeight();
+                }
+                if (progressViewStyle == ALERT_TYPE_MESSAGE) {
+                    layoutParams = (LayoutParams) contentScrollView.getLayoutParams();
+
+                    if (customView != null) {
+                        layoutParams.topMargin = titleTextView == null && messageTextView.getVisibility() == GONE && items == null ? AndroidUtilities.dp(16) : 0;
+                        layoutParams.bottomMargin = buttonsLayout == null ? AndroidUtilities.dp(8) : 0;
+                    } else if (items != null) {
+                        layoutParams.topMargin = titleTextView == null && messageTextView.getVisibility() == GONE ? AndroidUtilities.dp(8) : 0;
+                        layoutParams.bottomMargin = AndroidUtilities.dp(8);
+                    } else if (messageTextView.getVisibility() == VISIBLE) {
+                        layoutParams.topMargin = titleTextView == null ? AndroidUtilities.dp(19) : 0;
+                        layoutParams.bottomMargin = AndroidUtilities.dp(20);
+                    }
+
+                    availableHeight -= layoutParams.bottomMargin + layoutParams.topMargin;
+                    contentScrollView.measure(childFullWidthMeasureSpec, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
+                    availableHeight -= contentScrollView.getMeasuredHeight();
+                } else {
+                    if (progressViewContainer != null) {
+                        progressViewContainer.measure(childWidthMeasureSpec, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
+                        layoutParams = (LayoutParams) progressViewContainer.getLayoutParams();
+                        availableHeight -= progressViewContainer.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
+                    } else if (messageTextView != null) {
+                        messageTextView.measure(childWidthMeasureSpec, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
+                        if (messageTextView.getVisibility() != GONE) {
+                            layoutParams = (LayoutParams) messageTextView.getLayoutParams();
+                            availableHeight -= messageTextView.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
+                        }
+                    }
+                    if (lineProgressView != null) {
+                        lineProgressView.measure(childWidthMeasureSpec, MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(4), MeasureSpec.EXACTLY));
+                        layoutParams = (LayoutParams) lineProgressView.getLayoutParams();
+                        availableHeight -= lineProgressView.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
+
+                        lineProgressViewPercent.measure(childWidthMeasureSpec, MeasureSpec.makeMeasureSpec(availableHeight, MeasureSpec.AT_MOST));
+                        layoutParams = (LayoutParams) lineProgressViewPercent.getLayoutParams();
+                        availableHeight -= lineProgressViewPercent.getMeasuredHeight() + layoutParams.bottomMargin + layoutParams.topMargin;
+                    }
+                }
+
+                setMeasuredDimension(width, maxContentHeight - availableHeight + getPaddingTop() + getPaddingBottom() - (topAnimationIsNew ? AndroidUtilities.dp(8) : 0));
+                inLayout = false;
+
+                if (lastScreenWidth != AndroidUtilities.displaySize.x) {
+                    AndroidUtilities.runOnUIThread(() -> {
+                        lastScreenWidth = AndroidUtilities.displaySize.x;
+                        final int calculatedWidth = AndroidUtilities.displaySize.x - AndroidUtilities.dp(56);
+                        int maxWidth;
+                        if (AndroidUtilities.isTablet()) {
+                            if (AndroidUtilities.isSmallTablet()) {
+                                maxWidth = AndroidUtilities.dp(446);
+                            } else {
+                                maxWidth = AndroidUtilities.dp(496);
+                            }
+                        } else {
+                            maxWidth = AndroidUtilities.dp(356);
+                        }
+
+                        Window window = getWindow();
+                        WindowManager.LayoutParams params = new WindowManager.LayoutParams();
+                        params.copyFrom(window.getAttributes());
+                        params.width = Math.min(maxWidth, calculatedWidth) + backgroundPaddings.left + backgroundPaddings.right;
+                        try {
+                            window.setAttributes(params);
+                        } catch (Throwable e) {
+                            FileLog.e(e);
+                        }
+                    });
+                }
+            }
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int l, int t, int r, int b) {
+            super.onLayout(changed, l, t, r, b);
+            if (progressViewStyle == ALERT_TYPE_SPINNER) {
+                int x = (r - l - progressViewContainer.getMeasuredWidth()) / 2;
+                int y = (b - t - progressViewContainer.getMeasuredHeight()) / 2;
+                progressViewContainer.layout(x, y, x + progressViewContainer.getMeasuredWidth(), y + progressViewContainer.getMeasuredHeight());
+            } else if (contentScrollView != null) {
+                if (onScrollChangedListener == null) {
+                    onScrollChangedListener = () -> {
+                        runShadowAnimation(0, titleTextView != null && contentScrollView.getScrollY() > scrollContainer.getTop());
+                        runShadowAnimation(1, buttonsLayout != null && contentScrollView.getScrollY() + contentScrollView.getHeight() < scrollContainer.getBottom());
+                        contentScrollView.invalidate();
+                    };
+                    contentScrollView.getViewTreeObserver().addOnScrollChangedListener(onScrollChangedListener);
+                }
+                onScrollChangedListener.onScrollChanged();
+            }
+
+            getLocationOnScreen(containerViewLocation);
+            if (blurMatrix != null && blurShader != null) {
+                blurMatrix.reset();
+                blurMatrix.postScale(8f, 8f);
+                blurMatrix.postTranslate(-containerViewLocation[0], -containerViewLocation[1]);
+                blurShader.setLocalMatrix(blurMatrix);
+            }
+        }
+
+        @Override
+        public void requestLayout() {
+            if (inLayout) {
+                return;
+            }
+            super.requestLayout();
+        }
+
+        @Override
+        public boolean hasOverlappingRendering() {
+            return false;
+        }
+
+        private AnimatedFloat blurPaintAlpha = new AnimatedFloat(0, this);
+        private Paint backgroundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        @Override
+        public void draw(Canvas canvas) {
+            if (blurredBackground && !blurredNativeBackground) {
+                float r;
+                if (progressViewStyle == ALERT_TYPE_SPINNER && progressViewContainer != null) {
+                    r = AndroidUtilities.dp(18);
+                    float w = progressViewContainer.getWidth() * progressViewContainer.getScaleX();
+                    float h = progressViewContainer.getHeight() * progressViewContainer.getScaleY();
+                    AndroidUtilities.rectTmp.set(
                             (getWidth() - w) / 2f,
                             (getHeight() - h) / 2f,
                             (getWidth() + w) / 2f,
                             (getHeight() + h) / 2f
-                        );
-                    } else {
-                        r = AndroidUtilities.dp(10);
-                        AndroidUtilities.rectTmp.set(getPaddingLeft(), getPaddingTop(), getMeasuredWidth() - getPaddingRight(), getMeasuredHeight() - getPaddingBottom());
-                    }
-
-                    // draw blur of background
-                    float blurAlpha = blurPaintAlpha.set(blurPaint != null ? 1f : 0f);
-                    if (blurPaint != null) {
-                        blurPaint.setAlpha((int) (0xFF * blurAlpha));
-                        canvas.drawRoundRect(AndroidUtilities.rectTmp, r, r, blurPaint);
-                    }
-
-                    // draw dim above blur
-                    if (dimBlurPaint == null) {
-                        dimBlurPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                        dimBlurPaint.setColor(ColorUtils.setAlphaComponent(0xff000000, (int) (0xFF * dimAlpha)));
-                    }
-                    canvas.drawRoundRect(AndroidUtilities.rectTmp, r, r, dimBlurPaint);
-
-                    // draw background
-                    backgroundPaint.setColor(backgroundColor);
-                    backgroundPaint.setAlpha((int) (backgroundPaint.getAlpha() * (blurAlpha * (blurOpacity - 1f) + 1f)));
-                    canvas.drawRoundRect(AndroidUtilities.rectTmp, r, r, backgroundPaint);
+                    );
+                } else {
+                    r = AndroidUtilities.dp(10);
+                    AndroidUtilities.rectTmp.set(getPaddingLeft(), getPaddingTop(), getMeasuredWidth() - getPaddingRight(), getMeasuredHeight() - getPaddingBottom());
                 }
-                super.draw(canvas);
-            }
 
-            @Override
-            protected void dispatchDraw(Canvas canvas) {
-                if (drawBackground && !blurredBackground) {
-                    shadowDrawable.setBounds(0, 0, getMeasuredWidth(), getMeasuredHeight());
-                    if (topView != null && notDrawBackgroundOnTopView) {
-                        int clipTop = topView.getBottom();
-                        canvas.save();
-                        canvas.clipRect(0, clipTop, getMeasuredWidth(), getMeasuredHeight());
-                        shadowDrawable.draw(canvas);
-                        canvas.restore();
-                    } else {
-                        shadowDrawable.draw(canvas);
-                    }
+                // draw blur of background
+                float blurAlpha = blurPaintAlpha.set(blurPaint != null ? 1f : 0f);
+                if (blurPaint != null) {
+                    blurPaint.setAlpha((int) (0xFF * blurAlpha));
+                    canvas.drawRoundRect(AndroidUtilities.rectTmp, r, r, blurPaint);
                 }
-                super.dispatchDraw(canvas);
+
+                // draw dim above blur
+                if (dimBlurPaint == null) {
+                    dimBlurPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+                    dimBlurPaint.setColor(ColorUtils.setAlphaComponent(0xff000000, (int) (0xFF * dimAlpha)));
+                }
+                canvas.drawRoundRect(AndroidUtilities.rectTmp, r, r, dimBlurPaint);
+
+                // draw background
+                backgroundPaint.setColor(backgroundColor);
+                backgroundPaint.setAlpha((int) (backgroundPaint.getAlpha() * (blurAlpha * (blurOpacity - 1f) + 1f)));
+                canvas.drawRoundRect(AndroidUtilities.rectTmp, r, r, backgroundPaint);
             }
-        };
+            super.draw(canvas);
+        }
+
+        @Override
+        protected void dispatchDraw(Canvas canvas) {
+            if (drawBackground && !blurredBackground) {
+                shadowDrawable.setBounds(0, 0, getMeasuredWidth(), getMeasuredHeight());
+                if (topView != null && notDrawBackgroundOnTopView) {
+                    int clipTop = topView.getBottom();
+                    canvas.save();
+                    canvas.clipRect(0, clipTop, getMeasuredWidth(), getMeasuredHeight());
+                    shadowDrawable.draw(canvas);
+                    canvas.restore();
+                } else {
+                    shadowDrawable.draw(canvas);
+                }
+            }
+            super.dispatchDraw(canvas);
+        }
+    }
+
+    private AlertDialogView containerView;
+    public AlertDialogView getContainerView() {
+        return containerView;
+    }
+
+    protected View inflateContent(boolean setContent) {
+        containerView = new AlertDialogView(getContext());
         containerView.setOrientation(LinearLayout.VERTICAL);
-        if (blurredBackground || progressViewStyle == ALERT_TYPE_SPINNER) {
+        if ((blurredBackground || progressViewStyle == ALERT_TYPE_SPINNER) && progressViewStyle != ALERT_TYPE_LOADING) {
             containerView.setBackgroundDrawable(null);
             containerView.setPadding(0, 0, 0, 0);
             if (blurredBackground && !blurredNativeBackground) {
@@ -589,7 +620,15 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             }
         }
         containerView.setFitsSystemWindows(Build.VERSION.SDK_INT >= 21);
-        setContentView(containerView);
+        if (setContent) {
+            if (customWidth > 0) {
+                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                lp.gravity = Gravity.CENTER;
+                setContentView(containerView, lp);
+            } else {
+                setContentView(containerView);
+            }
+        }
 
         final boolean hasButtons = positiveButtonText != null || negativeButtonText != null || neutralButtonText != null;
 
@@ -597,6 +636,20 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             topImageView = new RLottieImageView(getContext());
             if (topDrawable != null) {
                 topImageView.setImageDrawable(topDrawable);
+                if (topDrawable instanceof AttachableDrawable) {
+                    final AttachableDrawable d = (AttachableDrawable) topDrawable;
+                    topImageView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                        @Override
+                        public void onViewAttachedToWindow(@NonNull View v) {
+                            d.onAttachedToWindow(null);
+                        }
+                        @Override
+                        public void onViewDetachedFromWindow(@NonNull View v) {
+                            d.onDetachedFromWindow(null);
+                        }
+                    });
+                    d.setParent(topImageView);
+                }
             } else if (topResId != 0) {
                 topImageView.setImageResource(topResId);
             } else {
@@ -660,10 +713,12 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             containerView.addView(titleContainer, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, topAnimationIsNew ? Gravity.CENTER_HORIZONTAL : 0, 24, 0, 24, 0));
 
             titleTextView = new SpoilersTextView(getContext(), false);
+            NotificationCenter.listenEmojiLoading(titleTextView);
+            titleTextView.cacheType = AnimatedEmojiDrawable.CACHE_TYPE_ALERT_PREVIEW;
             titleTextView.setText(title);
             titleTextView.setTextColor(getThemedColor(Theme.key_dialogTextBlack));
             titleTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
-            titleTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            titleTextView.setTypeface(AndroidUtilities.bold());
             titleTextView.setGravity((topAnimationIsNew ? Gravity.CENTER_HORIZONTAL : LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
             titleContainer.addView(titleTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (topAnimationIsNew ? Gravity.CENTER_HORIZONTAL : LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 0, 19, 0, topAnimationIsNew ? 4 : (subtitle != null ? 2 : (items != null ? 14 : 10))));
         }
@@ -718,13 +773,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             contentScrollView.addView(scrollContainer, new ScrollView.LayoutParams(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         }
 
-        messageTextView = new SpoilersTextView(getContext(), false) {
-            @Override
-            public void setText(CharSequence text, BufferType type) {
-                text = Emoji.replaceEmoji(text, getPaint().getFontMetricsInt(), AndroidUtilities.dp(14), false);
-                super.setText(text, type);
-            }
-        };
+        messageTextView = new EffectsTextView(getContext());
         NotificationCenter.listenEmojiLoading(messageTextView);
         messageTextView.setTextColor(getThemedColor(topAnimationIsNew ? Theme.key_windowBackgroundWhiteGrayText : Theme.key_dialogTextBlack));
         messageTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
@@ -745,7 +794,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             containerView.addView(lineProgressView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 4, Gravity.LEFT | Gravity.CENTER_VERTICAL, 24, 0, 24, 0));
 
             lineProgressViewPercent = new TextView(getContext());
-            lineProgressViewPercent.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            lineProgressViewPercent.setTypeface(AndroidUtilities.bold());
             lineProgressViewPercent.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
             lineProgressViewPercent.setTextColor(getThemedColor(Theme.key_dialogTextGray2));
             lineProgressViewPercent.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
@@ -767,7 +816,13 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             progressView.setProgressColor(getThemedColor(Theme.key_dialog_inlineProgress));
             progressViewContainer.addView(progressView, LayoutHelper.createFrame(86, 86, Gravity.CENTER));
         } else {
+            if (aboveMessageView != null) {
+                scrollContainer.addView(aboveMessageView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 22, 4, 22, 12));
+            }
             scrollContainer.addView(messageTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (topAnimationIsNew ? Gravity.CENTER_HORIZONTAL : LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 24, 0, 24, customView != null || items != null ? customViewOffset : 0));
+            if (bottomView != null) {
+                scrollContainer.addView(bottomView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 22, 12, 22, 0));
+            }
         }
         if (!TextUtils.isEmpty(message)) {
             messageTextView.setText(message);
@@ -905,7 +960,12 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
                     }
                 };
             }
-            buttonsLayout.setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8));
+            if(bottomView != null) {
+                buttonsLayout.setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), AndroidUtilities.dp(4));
+                buttonsLayout.setTranslationY(-AndroidUtilities.dp(6));
+            } else {
+                buttonsLayout.setPadding(AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8), AndroidUtilities.dp(8));
+            }
             containerView.addView(buttonsLayout, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 52));
             if (topAnimationIsNew) {
                 buttonsLayout.setTranslationY(-AndroidUtilities.dp(8));
@@ -930,7 +990,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
                 textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
                 textView.setTextColor(getThemedColor(dialogButtonColorKey));
                 textView.setGravity(Gravity.CENTER);
-                textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+                textView.setTypeface(AndroidUtilities.bold());
 //                textView.setLines(1);
 //                textView.setSingleLine(true); //TODO
                 textView.setText(positiveButtonText.toString());
@@ -970,7 +1030,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
                 textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
                 textView.setTextColor(getThemedColor(dialogButtonColorKey));
                 textView.setGravity(Gravity.CENTER);
-                textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+                textView.setTypeface(AndroidUtilities.bold());
                 textView.setEllipsize(TextUtils.TruncateAt.END);
                 textView.setSingleLine(true);
                 textView.setText(negativeButtonText.toString());
@@ -1010,7 +1070,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
                 textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
                 textView.setTextColor(getThemedColor(dialogButtonColorKey));
                 textView.setGravity(Gravity.CENTER);
-                textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+                textView.setTypeface(AndroidUtilities.bold());
                 textView.setEllipsize(TextUtils.TruncateAt.END);
                 textView.setSingleLine(true);
                 textView.setText(neutralButtonText.toString());
@@ -1112,6 +1172,13 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
 
         window.setAttributes(params);
 
+        return containerView;
+    }
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        inflateContent(true);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
     }
 
@@ -1121,6 +1188,10 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
         if (onBackButtonListener != null) {
             onBackButtonListener.onClick(AlertDialog.this, AlertDialog.BUTTON_NEGATIVE);
         }
+    }
+
+    public void setOnPreDismissListener(OnDismissListener onDismissListener) {
+        this.onDismissListener = onDismissListener;
     }
 
     public void setFocusable(boolean value) {
@@ -1156,15 +1227,30 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
         }
     }
 
-    private void showCancelAlert() {
+    public void setTextSize(int titleSizeDp, int messageSizeDp) {
+        if (titleTextView != null) {
+            titleTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, titleSizeDp);
+        }
+        if (messageTextView != null) {
+            messageTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, messageSizeDp);
+        }
+    }
+
+    public void setMessageLineSpacing(float spaceDp) {
+        if (messageTextView != null) {
+            messageTextView.setLineSpacing(AndroidUtilities.dp(spaceDp), 1.0f);
+        }
+    }
+
+    public void showCancelAlert() {
         if (!canCacnel || cancelDialog != null) {
             return;
         }
-        Builder builder = new Builder(getContext());
-        builder.setTitle(LocaleController.getString("StopLoadingTitle", R.string.StopLoadingTitle));
-        builder.setMessage(LocaleController.getString("StopLoading", R.string.StopLoading));
-        builder.setPositiveButton(LocaleController.getString("WaitMore", R.string.WaitMore), null);
-        builder.setNegativeButton(LocaleController.getString("Stop", R.string.Stop), (dialogInterface, i) -> {
+        Builder builder = new Builder(getContext(), resourcesProvider);
+        builder.setTitle(LocaleController.getString(R.string.StopLoadingTitle));
+        builder.setMessage(LocaleController.getString(R.string.StopLoading));
+        builder.setPositiveButton(LocaleController.getString(R.string.WaitMore), null);
+        builder.setNegativeButton(LocaleController.getString(R.string.Stop), (dialogInterface, i) -> {
             if (onCancelListener != null) {
                 onCancelListener.onCancel(AlertDialog.this);
             }
@@ -1261,8 +1347,30 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
         }
     }
 
+    public void dismissUnless(long minDuration) {
+        long currentShowDuration = System.currentTimeMillis() - shownAt;
+        if (currentShowDuration < minDuration) {
+            AndroidUtilities.runOnUIThread(this::dismiss, currentShowDuration - minDuration);
+        } else {
+            dismiss();
+        }
+    }
+
+    private boolean dismissed;
+    public boolean isDismissed() {
+        return dismissed;
+    }
+
     @Override
     public void dismiss() {
+        if (overridenDissmissListener != null) {
+            Utilities.Callback<Runnable> listener = overridenDissmissListener;
+            overridenDissmissListener = null;
+            listener.run(this::dismiss);
+            return;
+        }
+        if (dismissed) return;
+        dismissed = true;
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
         if (onDismissListener != null) {
             onDismissListener.onDismiss(this);
@@ -1422,9 +1530,8 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
         positiveButtonListener = listener;
     }
 
-    protected int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+    protected int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 
     public void showDelayed(long delay) {
@@ -1457,7 +1564,11 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
         }
 
         public Builder(Context context, int progressViewStyle, Theme.ResourcesProvider resourcesProvider) {
-            alertDialog = new AlertDialog(context, progressViewStyle, resourcesProvider);
+            alertDialog = createAlertDialog(context, progressViewStyle, resourcesProvider);
+        }
+
+        protected AlertDialog createAlertDialog(Context context, int progressViewStyle, Theme.ResourcesProvider resourcesProvider) {
+            return new AlertDialog(context, progressViewStyle, resourcesProvider);
         }
 
         public Context getContext() {
@@ -1497,6 +1608,21 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             return this;
         }
 
+        public Builder setWidth(int width) {
+            alertDialog.customWidth = width;
+            return this;
+        }
+
+        public Builder aboveMessageView(View view) {
+            alertDialog.aboveMessageView = view;
+            return this;
+        }
+
+        public Builder addBottomView(View view) {
+            alertDialog.bottomView = view;
+            return this;
+        }
+
         public Builder setTitle(CharSequence title) {
             alertDialog.title = title;
             return this;
@@ -1507,6 +1633,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             return this;
         }
 
+        @Keep
         public Builder setTopImage(int resId, int backgroundColor) {
             alertDialog.topResId = resId;
             alertDialog.topBackgroundColor = backgroundColor;
@@ -1518,7 +1645,7 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             return this;
         }
 
-        public Builder setDialogButtonColorKey(String key) {
+        public Builder setDialogButtonColorKey(int key) {
             alertDialog.dialogButtonColorKey = key;
             return this;
         }
@@ -1598,8 +1725,24 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             return alertDialog;
         }
 
+        private final boolean[] red = new boolean[3];
+        public Builder makeRed(int button) {
+            int index = (-button) - 1;
+            if (index >= 0 && index < red.length) {
+                red[index] = true;
+            }
+            return this;
+        }
+
         public AlertDialog show() {
             alertDialog.show();
+            for (int i = 0; i < red.length; i++) {
+                if (!red[i]) continue;
+                TextView button = (TextView) alertDialog.getButton(-(i + 1));
+                if (button != null) {
+                    button.setTextColor(alertDialog.getThemedColor(Theme.key_text_RedBold));
+                }
+            }
             return alertDialog;
         }
 
@@ -1640,6 +1783,11 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
             return this;
         }
 
+        public Builder overrideDismissListener(Utilities.Callback<Runnable> overridenDissmissListener) {
+            alertDialog.overridenDissmissListener = overridenDissmissListener;
+            return this;
+        }
+
         public Builder setBlurredBackground(boolean b) {
             alertDialog.blurredBackground = b;
             return this;
@@ -1647,6 +1795,11 @@ public class AlertDialog extends Dialog implements Drawable.Callback, Notificati
 
         public Builder setAdditionalHorizontalPadding(int padding) {
             alertDialog.additioanalHorizontalPadding = padding;
+            return this;
+        }
+
+        public Builder makeCustomMaxHeight() {
+            alertDialog.customMaxHeight = true;
             return this;
         }
     }

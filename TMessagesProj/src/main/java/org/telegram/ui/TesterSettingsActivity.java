@@ -5,17 +5,26 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.MessagesController;
+import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
-import org.telegram.messenger.fakepasscode.Utils;
+import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.partisan.Utils;
+import org.telegram.messenger.partisan.SecurityChecker;
+import org.telegram.messenger.partisan.SecurityIssue;
+import org.telegram.messenger.partisan.verification.VerificationRepository;
+import org.telegram.messenger.partisan.verification.VerificationStorage;
+import org.telegram.messenger.partisan.verification.VerificationUpdatesChecker;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -33,7 +42,10 @@ import org.telegram.ui.DialogBuilder.DialogType;
 import org.telegram.ui.DialogBuilder.FakePasscodeDialogBuilder;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Supplier;
 
 public class TesterSettingsActivity extends BaseFragment {
@@ -76,6 +88,16 @@ public class TesterSettingsActivity extends BaseFragment {
     private int simpleDataEndRow;
     private int hideDialogIsNotSafeWarningRow;
     private int phoneOverrideRow;
+    private int resetSecurityIssuesRow;
+    private int activateAllSecurityIssuesRow;
+    private int editSavedChannelsRow;
+    private int resetUpdateRow;
+    private int checkVerificationUpdatesRow;
+    private int resetVerificationLastCheckTimeRow;
+    private int forceAllowScreenshotsRow;
+    private int saveLogcatAfterRestartRow;
+    private int showEncryptedChatsFromEncryptedGroupsRow;
+    private int enableSecretGroupsRow;
 
     public static boolean showPlainBackup;
 
@@ -157,6 +179,7 @@ public class TesterSettingsActivity extends BaseFragment {
                 template.addEditTemplate(value, "Channel Username", true);
                 template.positiveListener = views -> {
                     String username = ((EditTextCaption)views.get(0)).getText().toString();
+                    username = Utils.removeUsernamePrefixed(username);
                     SharedConfig.updateChannelUsernameOverride = username;
                     SharedConfig.saveConfig();
                     TextSettingsCell cell = (TextSettingsCell) view;
@@ -203,6 +226,81 @@ public class TesterSettingsActivity extends BaseFragment {
                 };
                 AlertDialog dialog = FakePasscodeDialogBuilder.build(getParentActivity(), template);
                 showDialog(dialog);
+            } else if (position == resetSecurityIssuesRow) {
+                setSecurityIssues(new HashSet<>());
+                SecurityChecker.checkSecurityIssuesAndSave(getParentActivity(), getCurrentAccount(), true);
+                Toast.makeText(getParentActivity(), "Reset", Toast.LENGTH_SHORT).show();
+            } else if (position == activateAllSecurityIssuesRow) {
+                setSecurityIssues(new HashSet<>(Arrays.asList(SecurityIssue.values())));
+                Toast.makeText(getParentActivity(), "Activated", Toast.LENGTH_SHORT).show();
+            } else if (position == editSavedChannelsRow) {
+                DialogTemplate template = new DialogTemplate();
+                template.type = DialogType.EDIT;
+                String title = "Saved Channels";
+                template.title = title;
+                String value = getUserConfig().savedChannels.stream().reduce("", (acc, name) -> {
+                    String result = acc;
+                    if (!acc.isEmpty()) {
+                        result += "\n";
+                    }
+                    if (getUserConfig().pinnedSavedChannels.contains(name)) {
+                        result += "*";
+                    }
+                    result += name;
+                    return result;
+                });
+                template.addEditTemplate(value, "Phone Override", false);
+                template.positiveListener = views -> {
+                    String text = ((EditTextCaption)views.get(0)).getText().toString();
+                    getUserConfig().pinnedSavedChannels = new ArrayList<>();
+                    getUserConfig().savedChannels = new HashSet<>();
+                    for (String line : text.split("\n")) {
+                        String name = line.replace("*", "");
+                        if (line.startsWith("*")) {
+                            getUserConfig().pinnedSavedChannels.add(name);
+                        }
+                        getUserConfig().savedChannels.add(name);
+                    }
+                    getUserConfig().saveConfig(false);
+                    TextSettingsCell cell = (TextSettingsCell) view;
+                    cell.setTextAndValue(title, Integer.toString(getUserConfig().savedChannels.size()), true);
+                };
+                template.negativeListener = (dlg, whichButton) -> {
+                    getUserConfig().pinnedSavedChannels = new ArrayList<>();
+                    getUserConfig().savedChannels = new HashSet<>();
+                    getUserConfig().saveConfig(false);
+                    TextSettingsCell cell = (TextSettingsCell) view;
+                    cell.setTextAndValue(title, "0", true);
+                };
+                AlertDialog dialog = FakePasscodeDialogBuilder.build(getParentActivity(), template);
+                showDialog(dialog);
+            } else if (position == resetUpdateRow) {
+                SharedConfig.pendingPtgAppUpdate = null;
+                SharedConfig.saveConfig();
+                Toast.makeText(getParentActivity(), "Reset", Toast.LENGTH_SHORT).show();
+                NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.appUpdateAvailable);
+            } else if (position == checkVerificationUpdatesRow) {
+                VerificationUpdatesChecker.checkUpdate(currentAccount, true);
+                Toast.makeText(getParentActivity(), "Check started", Toast.LENGTH_SHORT).show();
+            } else if (position == resetVerificationLastCheckTimeRow) {
+                for (VerificationStorage storage : VerificationRepository.getInstance().getStorages()) {
+                    VerificationRepository.getInstance().saveNextCheckTime(storage.chatId, 0);
+                }
+                Toast.makeText(getParentActivity(), "Reset", Toast.LENGTH_SHORT).show();
+            } else if (position == forceAllowScreenshotsRow) {
+                SharedConfig.forceAllowScreenshots = !SharedConfig.forceAllowScreenshots;
+                SharedConfig.saveConfig();
+                ((TextCheckCell) view).setChecked(SharedConfig.forceAllowScreenshots);
+            } else if (position == saveLogcatAfterRestartRow) {
+                SharedConfig.saveLogcatAfterRestart = !SharedConfig.saveLogcatAfterRestart;
+                SharedConfig.saveConfig();
+                ((TextCheckCell) view).setChecked(SharedConfig.saveLogcatAfterRestart);
+            } else if (position == showEncryptedChatsFromEncryptedGroupsRow) {
+                SharedConfig.toggleShowEncryptedChatsFromEncryptedGroups();
+                ((TextCheckCell) view).setChecked(SharedConfig.showEncryptedChatsFromEncryptedGroups);
+            } else if (position == enableSecretGroupsRow) {
+                SharedConfig.toggleSecretGroups();
+                ((TextCheckCell) view).setChecked(SharedConfig.encryptedGroupsEnabled);
             }
         });
 
@@ -220,6 +318,9 @@ public class TesterSettingsActivity extends BaseFragment {
     private void updateRows() {
         rowCount = 0;
 
+        phoneOverrideRow = -1;
+        forceAllowScreenshotsRow = -1;
+
         sessionTerminateActionWarningRow = rowCount++;
         updateChannelIdRow = rowCount++;
         updateChannelUsernameRow = rowCount++;
@@ -229,7 +330,21 @@ public class TesterSettingsActivity extends BaseFragment {
         rowCount += simpleDataArray.length;
         simpleDataEndRow = rowCount;
         hideDialogIsNotSafeWarningRow = rowCount++;
-        phoneOverrideRow = rowCount++;
+        if (SharedConfig.activatedTesterSettingType >= 2) {
+            phoneOverrideRow = rowCount++;
+        }
+        resetSecurityIssuesRow = rowCount++;
+        activateAllSecurityIssuesRow = rowCount++;
+        editSavedChannelsRow = rowCount++;
+        resetUpdateRow = rowCount++;
+        checkVerificationUpdatesRow = rowCount++;
+        resetVerificationLastCheckTimeRow = rowCount++;
+        if (SharedConfig.activatedTesterSettingType >= 2) {
+            forceAllowScreenshotsRow = rowCount++;
+        }
+        saveLogcatAfterRestartRow = rowCount++;
+        showEncryptedChatsFromEncryptedGroupsRow = rowCount++;
+        enableSecretGroupsRow = rowCount++;
     }
 
     @Override
@@ -265,6 +380,21 @@ public class TesterSettingsActivity extends BaseFragment {
 
     private List<TLRPC.Dialog> getAllDialogs() {
         return Utils.getAllDialogs(currentAccount);
+    }
+
+    private void setSecurityIssues(Set<SecurityIssue> issues) {
+        SharedConfig.ignoredSecurityIssues = new HashSet<>();
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            UserConfig config = UserConfig.getInstance(a);
+            if (!config.isClientActivated()) {
+                continue;
+            }
+            config.currentSecurityIssues = issues;
+            config.ignoredSecurityIssues = new HashSet<>();
+            config.lastSecuritySuggestionsShow = 0;
+            config.showSecuritySuggestions = !issues.isEmpty();
+            config.saveConfig(false);
+        }
     }
 
     private class ListAdapter extends RecyclerListView.SelectionAdapter {
@@ -318,10 +448,22 @@ public class TesterSettingsActivity extends BaseFragment {
                     } else if (position == showPlainBackupRow) {
                         textCell.setTextAndCheck("Show plain backup", showPlainBackup, true);
                     } else if (position == disablePremiumRow) {
-                        textCell.setTextAndCheck("Disable Premiun", SharedConfig.premiumDisabled, true);
+                        textCell.setTextAndCheck("Disable Premium", SharedConfig.premiumDisabled, true);
                     } else if (position == hideDialogIsNotSafeWarningRow) {
                         textCell.setTextAndCheck("Show hide dialog is not safe warning",
                                 SharedConfig.showHideDialogIsNotSafeWarning, true);
+                    } else if (position == forceAllowScreenshotsRow) {
+                        textCell.setTextAndCheck("Force allow screenshots",
+                                SharedConfig.forceAllowScreenshots, true);
+                    } else if (position == saveLogcatAfterRestartRow) {
+                        textCell.setTextAndCheck("Save logcat after restart",
+                                SharedConfig.saveLogcatAfterRestart, true);
+                    } else if (position == showEncryptedChatsFromEncryptedGroupsRow) {
+                        textCell.setTextAndCheck("Show encrypted chats from encrypted groups",
+                                SharedConfig.showEncryptedChatsFromEncryptedGroups, true);
+                    } else if (position == enableSecretGroupsRow) {
+                        textCell.setTextAndCheck("Secret groups enabled",
+                                SharedConfig.encryptedGroupsEnabled, true);
                     }
                     break;
                 } case 1: {
@@ -336,6 +478,18 @@ public class TesterSettingsActivity extends BaseFragment {
                         textCell.setTextAndValue(simpleData.name, simpleData.getValue.get(), true);
                     } else if (position == phoneOverrideRow) {
                         textCell.setTextAndValue("Phone Override", SharedConfig.phoneOverride, true);
+                    } else if (position == resetSecurityIssuesRow) {
+                        textCell.setText("Reset Security Issues", true);
+                    } else if (position == activateAllSecurityIssuesRow) {
+                        textCell.setText("Activate All Security Issues", true);
+                    } else if (position == editSavedChannelsRow) {
+                        textCell.setTextAndValue("Saved Channels", Integer.toString(getUserConfig().savedChannels.size()), true);
+                    } else if (position == resetUpdateRow) {
+                        textCell.setText("Reset Update", true);
+                    } else if (position == checkVerificationUpdatesRow) {
+                        textCell.setText("Check Verification Updates", true);
+                    } else if (position == resetVerificationLastCheckTimeRow) {
+                        textCell.setText("Reset Verification Last Check Time", true);
                     }
                     break;
                 }
@@ -345,11 +499,15 @@ public class TesterSettingsActivity extends BaseFragment {
         @Override
         public int getItemViewType(int position) {
             if (position == sessionTerminateActionWarningRow || position == showPlainBackupRow
-                || position == disablePremiumRow || position == hideDialogIsNotSafeWarningRow) {
+                    || position == disablePremiumRow || position == hideDialogIsNotSafeWarningRow
+                    || position == forceAllowScreenshotsRow || position == saveLogcatAfterRestartRow) {
                 return 0;
             } else if (position == updateChannelIdRow || position == updateChannelUsernameRow
                     || (simpleDataStartRow <= position && position < simpleDataEndRow)
-                    || position == phoneOverrideRow) {
+                    || position == phoneOverrideRow || position == resetSecurityIssuesRow
+                    || position == activateAllSecurityIssuesRow || position == editSavedChannelsRow
+                    || position == resetUpdateRow || position == checkVerificationUpdatesRow
+                    || position == resetVerificationLastCheckTimeRow) {
                 return 1;
             }
             return 0;

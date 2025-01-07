@@ -29,13 +29,12 @@ import androidx.core.graphics.ColorUtils;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LiteMode;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.R;
-import org.telegram.messenger.UserConfig;
-import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.voip.VoIPService;
@@ -126,7 +125,7 @@ public class GroupCallUserCell extends FrameLayout {
         muteButton.playAnimation();
     };
 
-    private String grayIconColor = Theme.key_voipgroup_mutedIcon;
+    private int grayIconColor = Theme.key_voipgroup_mutedIcon;
 
     private Runnable checkRaiseRunnable = () -> applyParticipantChanges(true, true);
 
@@ -291,7 +290,7 @@ public class GroupCallUserCell extends FrameLayout {
 
         nameTextView = new SimpleTextView(context);
         nameTextView.setTextColor(Theme.getColor(Theme.key_voipgroup_nameText));
-        nameTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        nameTextView.setTypeface(AndroidUtilities.bold());
         nameTextView.setTextSize(16);
         nameTextView.setDrawablePadding(AndroidUtilities.dp(6));
         nameTextView.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
@@ -356,17 +355,17 @@ public class GroupCallUserCell extends FrameLayout {
             } else {
                 if (a == 0) {
                     statusTextView[a].setTextColor(Theme.getColor(Theme.key_voipgroup_listeningText));
-                    statusTextView[a].setText(LocaleController.getString("Listening", R.string.Listening));
+                    statusTextView[a].setText(LocaleController.getString(R.string.Listening));
                 } else if (a == 1) {
                     statusTextView[a].setTextColor(Theme.getColor(Theme.key_voipgroup_speakingText));
-                    statusTextView[a].setText(LocaleController.getString("Speaking", R.string.Speaking));
+                    statusTextView[a].setText(LocaleController.getString(R.string.Speaking));
                     statusTextView[a].setDrawablePadding(AndroidUtilities.dp(2));
                 } else if (a == 2) {
                     statusTextView[a].setTextColor(Theme.getColor(Theme.key_voipgroup_mutedByAdminIcon));
-                    statusTextView[a].setText(LocaleController.getString("VoipGroupMutedForMe", R.string.VoipGroupMutedForMe));
+                    statusTextView[a].setText(LocaleController.getString(R.string.VoipGroupMutedForMe));
                 } else if (a == 3) {
                     statusTextView[a].setTextColor(Theme.getColor(Theme.key_voipgroup_listeningText));
-                    statusTextView[a].setText(LocaleController.getString("WantsToSpeak", R.string.WantsToSpeak));
+                    statusTextView[a].setText(LocaleController.getString(R.string.WantsToSpeak));
                 }
                 addView(statusTextView[a], LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 20, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 54 : 67, 32, LocaleController.isRTL ? 67 : 54, 0));
             }
@@ -470,15 +469,13 @@ public class GroupCallUserCell extends FrameLayout {
         if (id > 0) {
             currentUser = accountInstance.getMessagesController().getUser(id);
             currentChat = null;
-            avatarDrawable.setInfo(currentUser);
+            avatarDrawable.setInfo(accountInstance.getCurrentAccount(), currentUser);
 
             nameTextView.setText(UserObject.getUserName(currentUser, account.getCurrentAccount()));
-            if (currentUser != null && currentUser.verified) {
+            if (currentUser != null && currentUser.isVerified()) {
                 rightDrawable.set(verifiedDrawable = (verifiedDrawable == null ? new VerifiedDrawable(getContext()) : verifiedDrawable), animated);
-            } else if (currentUser != null && currentUser.emoji_status instanceof TLRPC.TL_emojiStatus) {
-                rightDrawable.set(((TLRPC.TL_emojiStatus) currentUser.emoji_status).document_id, animated);
-            } else if (currentUser != null && currentUser.emoji_status instanceof TLRPC.TL_emojiStatusUntil && ((TLRPC.TL_emojiStatusUntil) currentUser.emoji_status).until > (int) (System.currentTimeMillis() / 1000)) {
-                rightDrawable.set(((TLRPC.TL_emojiStatusUntil) currentUser.emoji_status).document_id, animated);
+            } else if (currentUser != null && DialogObject.getEmojiStatusDocumentId(currentUser.emoji_status) != 0) {
+                rightDrawable.set(DialogObject.getEmojiStatusDocumentId(currentUser.emoji_status), animated);
             } else if (currentUser != null && currentUser.premium) {
                 if (premiumDrawable == null) {
                     premiumDrawable = getContext().getResources().getDrawable(R.drawable.msg_premium_liststar).mutate();
@@ -510,12 +507,14 @@ public class GroupCallUserCell extends FrameLayout {
         } else {
             currentChat = accountInstance.getMessagesController().getChat(-id);
             currentUser = null;
-            avatarDrawable.setInfo(currentChat, account.getCurrentAccount());
+            avatarDrawable.setInfo(accountInstance.getCurrentAccount(), currentChat);
 
             if (currentChat != null) {
                 nameTextView.setText(account.getUserConfig().getChatTitleOverride(currentChat));
-                if (currentChat.verified) {
+                if (currentChat.isVerified()) {
                     rightDrawable.set(verifiedDrawable = (verifiedDrawable == null ? new VerifiedDrawable(getContext()) : verifiedDrawable), animated);
+                } else if (currentChat != null && DialogObject.getEmojiStatusDocumentId(currentChat.emoji_status) != 0) {
+                    rightDrawable.set(DialogObject.getEmojiStatusDocumentId(currentChat.emoji_status), animated);
                 } else {
                     rightDrawable.set((Drawable) null, animated);
                 }
@@ -586,8 +585,8 @@ public class GroupCallUserCell extends FrameLayout {
         applyParticipantChanges(animated, false);
     }
 
-    public void setGrayIconColor(String key, int value) {
-        if (!grayIconColor.equals(key)) {
+    public void setGrayIconColor(int key, int value) {
+        if (grayIconColor != key) {
             if (currentIconGray) {
                 lastMuteColor = Theme.getColor(key);
             }
@@ -715,23 +714,23 @@ public class GroupCallUserCell extends FrameLayout {
         if (isSelfUser()) {
             if (!hasAbout && !hasAvatar) {
                 if (currentUser != null) {
-                    statusTextView[4].setText(LocaleController.getString("TapToAddPhotoOrBio", R.string.TapToAddPhotoOrBio));
+                    statusTextView[4].setText(LocaleController.getString(R.string.TapToAddPhotoOrBio));
                 } else {
-                    statusTextView[4].setText(LocaleController.getString("TapToAddPhotoOrDescription", R.string.TapToAddPhotoOrDescription));
+                    statusTextView[4].setText(LocaleController.getString(R.string.TapToAddPhotoOrDescription));
                 }
                 statusTextView[4].setTextColor(Theme.getColor(grayIconColor));
             } else if (!hasAbout ){
                 if (currentUser != null) {
-                    statusTextView[4].setText(LocaleController.getString("TapToAddBio", R.string.TapToAddBio));
+                    statusTextView[4].setText(LocaleController.getString(R.string.TapToAddBio));
                 } else {
-                    statusTextView[4].setText(LocaleController.getString("TapToAddDescription", R.string.TapToAddDescription));
+                    statusTextView[4].setText(LocaleController.getString(R.string.TapToAddDescription));
                 }
                 statusTextView[4].setTextColor(Theme.getColor(grayIconColor));
             } else if (!hasAvatar) {
-                statusTextView[4].setText(LocaleController.getString("TapToAddPhoto", R.string.TapToAddPhoto));
+                statusTextView[4].setText(LocaleController.getString(R.string.TapToAddPhoto));
                 statusTextView[4].setTextColor(Theme.getColor(grayIconColor));
             } else {
-                statusTextView[4].setText(LocaleController.getString("ThisIsYou", R.string.ThisIsYou));
+                statusTextView[4].setText(LocaleController.getString(R.string.ThisIsYou));
                 statusTextView[4].setTextColor(Theme.getColor(Theme.key_voipgroup_listeningText));
             }
             if (hasAbout) {
@@ -786,7 +785,7 @@ public class GroupCallUserCell extends FrameLayout {
                 statusTextView[1].setText(LocaleController.formatString("SpeakingWithVolume", R.string.SpeakingWithVolume, vol < 100 ? 1 : volume));
             } else {
                 statusTextView[1].setLeftDrawable(null);
-                statusTextView[1].setText(LocaleController.getString("Speaking", R.string.Speaking));
+                statusTextView[1].setText(LocaleController.getString(R.string.Speaking));
             }
         }
         if (isSelfUser()) {
@@ -1086,7 +1085,7 @@ public class GroupCallUserCell extends FrameLayout {
     public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
         super.onInitializeAccessibilityNodeInfo(info);
         if (info.isEnabled() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, participant.muted && !participant.can_self_unmute ? LocaleController.getString("VoipUnmute", R.string.VoipUnmute) : LocaleController.getString("VoipMute", R.string.VoipMute)));
+            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_CLICK, participant.muted && !participant.can_self_unmute ? LocaleController.getString(R.string.VoipUnmute) : LocaleController.getString(R.string.VoipMute)));
         }
     }
 

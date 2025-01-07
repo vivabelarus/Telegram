@@ -5,6 +5,8 @@ import android.animation.AnimatorListenerAdapter;
 import android.animation.AnimatorSet;
 import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
+import android.util.Log;
+import android.util.LongSparseArray;
 import android.view.View;
 import android.view.ViewPropertyAnimator;
 import android.view.animation.Interpolator;
@@ -14,18 +16,22 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.view.ViewCompat;
 
+import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.SharedConfig;
+import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Cells.BotHelpCell;
+import org.telegram.ui.Cells.ChatActionCell;
 import org.telegram.ui.Cells.ChatMessageCell;
 import org.telegram.ui.ChatActivity;
 import org.telegram.ui.Components.ChatGreetingsView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.RecyclerListView;
+import org.telegram.ui.Components.ThanosEffect;
 import org.telegram.ui.TextMessageEnterTransition;
 import org.telegram.ui.VoiceMessageEnterTransition;
 
@@ -39,6 +45,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
     public static final long DEFAULT_DURATION = 250;
     public static final Interpolator DEFAULT_INTERPOLATOR = new CubicBezierInterpolator(0.19919472913616398, 0.010644531250000006, 0.27920937042459737, 0.91025390625);
 
+    @Nullable
     private final ChatActivity activity;
     private final RecyclerListView recyclerListView;
 
@@ -46,6 +53,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
     private ArrayList<MessageObject.GroupedMessages> willChangedGroups = new ArrayList<>();
 
     HashMap<RecyclerView.ViewHolder,Animator> animators = new HashMap<>();
+    ArrayList<View> thanosViews = new ArrayList<>();
 
     ArrayList<Runnable> runOnAnimationsEnd = new ArrayList<>();
     HashMap<Long, Long> groupIdToEnterDelay = new HashMap<>();
@@ -124,9 +132,60 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
             return;
         }
         // First, remove stuff
-        for (RecyclerView.ViewHolder holder : mPendingRemovals) {
-            animateRemoveImpl(holder);
+        boolean hadThanos = false;
+        final boolean supportsThanos = getThanosEffectContainer != null && supportsThanosEffectContainer != null && supportsThanosEffectContainer.run();
+        if (supportsThanos) {
+            LongSparseArray<ArrayList<RecyclerView.ViewHolder>> groupsToRemoveWithThanos = null;
+            for (int i = 0; i < mPendingRemovals.size(); ++i) {
+                RecyclerView.ViewHolder holder = mPendingRemovals.get(i);
+                if (toBeSnapped.contains(holder) && holder.itemView instanceof ChatMessageCell && ((ChatMessageCell) holder.itemView).getCurrentMessagesGroup() != null) {
+                    MessageObject msg = ((ChatMessageCell) holder.itemView).getMessageObject();
+                    if (msg != null && msg.getGroupId() != 0) {
+                        if (groupsToRemoveWithThanos == null) {
+                            groupsToRemoveWithThanos = new LongSparseArray<>();
+                        }
+                        ArrayList<RecyclerView.ViewHolder> holders = groupsToRemoveWithThanos.get(msg.getGroupId());
+                        if (holders == null) {
+                            groupsToRemoveWithThanos.put(msg.getGroupId(), holders = new ArrayList<>());
+                        }
+                        toBeSnapped.remove(holder);
+                        mPendingRemovals.remove(i);
+                        i--;
+                        holders.add(holder);
+                    }
+                }
+            }
+            if (groupsToRemoveWithThanos != null) {
+                for (int i = 0; i < groupsToRemoveWithThanos.size(); ++i) {
+                    // check whether we remove the whole group
+                    ArrayList<RecyclerView.ViewHolder> holders = groupsToRemoveWithThanos.valueAt(i);
+                    if (holders.size() <= 0) continue;
+                    boolean wholeGroup = true;
+                    RecyclerView.ViewHolder firstHolder = holders.get(0);
+                    if (firstHolder.itemView instanceof ChatMessageCell) {
+                        MessageObject.GroupedMessages group = ((ChatMessageCell) firstHolder.itemView).getCurrentMessagesGroup();
+                        if (group != null) {
+                            wholeGroup = group.messages.size() <= holders.size();
+                        }
+                    }
+                    if (!wholeGroup) {
+                        // not whole group, fallback to prev animation
+                        mPendingRemovals.addAll(holders);
+                    } else {
+                        animateRemoveGroupImpl(holders);
+                        hadThanos = true;
+                    }
+                }
+            }
         }
+        for (RecyclerView.ViewHolder holder : mPendingRemovals) {
+            boolean thanos = toBeSnapped.remove(holder) && supportsThanos;
+            animateRemoveImpl(holder, thanos);
+            if (thanos) {
+                hadThanos = true;
+            }
+        }
+        final boolean finalThanos = hadThanos;
         mPendingRemovals.clear();
         // Next, move stuff
         if (movesPending) {
@@ -138,7 +197,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
                 @Override
                 public void run() {
                     for (MoveInfo moveInfo : moves) {
-                        animateMoveImpl(moveInfo.holder, moveInfo);
+                        animateMoveImpl(moveInfo.holder, moveInfo, finalThanos);
                     }
                     moves.clear();
                     mMovesList.remove(moves);
@@ -146,7 +205,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
             };
             if (delayAnimations && removalsPending) {
                 View view = moves.get(0).holder.itemView;
-                ViewCompat.postOnAnimationDelayed(view, mover, getMoveAnimationDelay());
+                ViewCompat.postOnAnimationDelayed(view, mover, hadThanos ? 0 : getMoveAnimationDelay());
             } else {
                 mover.run();
             }
@@ -289,7 +348,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
         if (!(chatMessageCell != null && chatMessageCell.getTransitionParams().ignoreAlpha)) {
             holder.itemView.setAlpha(1);
         }
-        if (chatMessageCell != null && activity.animatingMessageObjects.contains(chatMessageCell.getMessageObject())) {
+        if (activity != null && chatMessageCell != null && activity.animatingMessageObjects.contains(chatMessageCell.getMessageObject())) {
             activity.animatingMessageObjects.remove(chatMessageCell.getMessageObject());
             if (activity.getChatActivityEnterView().canShowMessageTransition()) {
                 if (chatMessageCell.getMessageObject().isVoice()) {
@@ -660,6 +719,9 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
 
     @Override
     protected void animateMoveImpl(RecyclerView.ViewHolder holder, MoveInfo moveInfo) {
+        animateMoveImpl(holder, moveInfo, false);
+    }
+    protected void animateMoveImpl(RecyclerView.ViewHolder holder, MoveInfo moveInfo, boolean withThanos) {
         int fromX = moveInfo.fromX;
         int fromY = moveInfo.fromY;
         int toX = moveInfo.toX;
@@ -842,10 +904,12 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
             }
         }
 
-        if (translationInterpolator != null) {
+        if (withThanos) {
+            animatorSet.setInterpolator(CubicBezierInterpolator.EASE_OUT);
+        } else if (translationInterpolator != null) {
             animatorSet.setInterpolator(translationInterpolator);
         }
-        animatorSet.setDuration(getMoveDuration());
+        animatorSet.setDuration((long) (getMoveDuration() * (withThanos ? 1.9f : 1f)));
         animatorSet.addListener(new AnimatorListenerAdapter() {
             @Override
             public void onAnimationStart(Animator animator) {
@@ -864,7 +928,12 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
                 animator.removeAllListeners();
                 restoreTransitionParams(holder.itemView);
                 if (holder.itemView instanceof ChatMessageCell) {
-                    MessageObject.GroupedMessages group = ((ChatMessageCell) view).getCurrentMessagesGroup();
+                    ChatMessageCell cell = (ChatMessageCell) holder.itemView;
+                    if (cell.makeVisibleAfterChange) {
+                        cell.makeVisibleAfterChange = false;
+                        cell.setVisibility(View.VISIBLE);
+                    }
+                    MessageObject.GroupedMessages group = cell.getCurrentMessagesGroup();
                     if (group != null) {
                         group.transitionParams.reset();
                     }
@@ -922,7 +991,7 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
         return true;
     }
 
-    void animateChangeImpl(final ChangeInfo changeInfo) {
+    public void animateChangeImpl(final ChangeInfo changeInfo) {
         final RecyclerView.ViewHolder holder = changeInfo.oldHolder;
         final View view = holder == null ? null : holder.itemView;
         final RecyclerView.ViewHolder newHolder = changeInfo.newHolder;
@@ -1031,6 +1100,12 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
                 animator.cancel();
             }
         }
+        if (!thanosViews.isEmpty()) {
+            ThanosEffect thanosEffect = getThanosEffectContainer.run();
+            if (thanosEffect != null) {
+                thanosEffect.kill();
+            }
+        }
     }
 
     @Override
@@ -1038,6 +1113,12 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
         Animator animator = animators.remove(item);
         if (animator != null) {
             animator.cancel();
+        }
+        if (thanosViews.contains(item.itemView)) {
+            ThanosEffect thanosEffect = getThanosEffectContainer.run();
+            if (thanosEffect != null) {
+                thanosEffect.cancel(item.itemView);
+            }
         }
         super.endAnimation(item);
         restoreTransitionParams(item.itemView);
@@ -1168,6 +1249,12 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
         Animator a = animators.remove(item);
         if (a != null) {
             a.cancel();
+        }
+        if (thanosViews.contains(item.itemView)) {
+            ThanosEffect thanosEffect = getThanosEffectContainer.run();
+            if (thanosEffect != null) {
+                thanosEffect.cancel(item.itemView);
+            }
         }
 
         boolean oldItem = false;
@@ -1371,36 +1458,76 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
         animatorSet.start();
     }
 
-    protected void animateRemoveImpl(final RecyclerView.ViewHolder holder) {
+    protected void animateRemoveImpl(final RecyclerView.ViewHolder holder, boolean thanos) {
         if (BuildVars.LOGS_ENABLED) {
-            FileLog.d("animate remove impl");
+            FileLog.d("animate remove impl " + (thanos ? " with thanos" : ""));
         }
         final View view = holder.itemView;
         mRemoveAnimations.add(holder);
-        ObjectAnimator animator = ObjectAnimator.ofFloat(view, View.ALPHA, view.getAlpha(), 0f);
-
-        dispatchRemoveStarting(holder);
-
-        animator.setDuration(getRemoveDuration());
-        animator.addListener(
-                new AnimatorListenerAdapter() {
-
-                    @Override
-                    public void onAnimationEnd(Animator animator) {
-                        animator.removeAllListeners();
-                        view.setAlpha(1);
-                        view.setScaleX(1f);
-                        view.setScaleY(1f);
-                        view.setTranslationX(0);
-                        view.setTranslationY(0);
-                        if (mRemoveAnimations.remove(holder)) {
-                            dispatchRemoveFinished(holder);
-                            dispatchFinishedWhenDone();
+        if (thanos && getThanosEffectContainer != null) {
+            ThanosEffect thanosEffect = getThanosEffectContainer.run();
+            dispatchRemoveStarting(holder);
+            thanosEffect.animate(view, () -> {
+                view.setVisibility(View.VISIBLE);
+                if (mRemoveAnimations.remove(holder)) {
+                    dispatchRemoveFinished(holder);
+                    dispatchFinishedWhenDone();
+                }
+                thanosViews.remove(view);
+            });
+            thanosViews.add(view);
+        } else {
+            ObjectAnimator animator = ObjectAnimator.ofFloat(view, View.ALPHA, view.getAlpha(), 0f);
+            dispatchRemoveStarting(holder);
+            animator.setDuration(getRemoveDuration());
+            animator.addListener(
+                    new AnimatorListenerAdapter() {
+                        @Override
+                        public void onAnimationEnd(Animator animator) {
+                            animator.removeAllListeners();
+                            view.setAlpha(1);
+                            view.setScaleX(1f);
+                            view.setScaleY(1f);
+                            view.setTranslationX(0);
+                            view.setTranslationY(0);
+                            if (mRemoveAnimations.remove(holder)) {
+                                dispatchRemoveFinished(holder);
+                                dispatchFinishedWhenDone();
+                            }
                         }
-                    }
-                });
-        animators.put(holder, animator);
-        animator.start();
+                    });
+            animators.put(holder, animator);
+            animator.start();
+        }
+        recyclerListView.stopScroll();
+    }
+
+    private void animateRemoveGroupImpl(final ArrayList<RecyclerView.ViewHolder> holders) {
+        if (BuildVars.LOGS_ENABLED) {
+            FileLog.d("animate remove group impl with thanos");
+        }
+        mRemoveAnimations.addAll(holders);
+        ThanosEffect thanosEffect = getThanosEffectContainer.run();
+        for (int i = 0; i < holders.size(); ++i) {
+            dispatchRemoveStarting(holders.get(i));
+        }
+        final ArrayList<View> views = new ArrayList<>();
+        for (int i = 0; i < holders.size(); ++i) {
+            views.add(holders.get(i).itemView);
+        }
+        thanosEffect.animateGroup(views, () -> {
+            for (int i = 0; i < views.size(); ++i) {
+                views.get(i).setVisibility(View.VISIBLE);
+            }
+            if (mRemoveAnimations.removeAll(holders)) {
+                for (int i = 0; i < holders.size(); ++i) {
+                    dispatchRemoveFinished(holders.get(i));
+                }
+                dispatchFinishedWhenDone();
+            }
+            thanosViews.removeAll(views);
+        });
+        thanosViews.add(views.get(0));
         recyclerListView.stopScroll();
     }
 
@@ -1500,6 +1627,28 @@ public class ChatListItemAnimator extends DefaultItemAnimator {
         float imageHeight;
         int captionX;
         int captionY;
+    }
+
+    private final ArrayList<RecyclerView.ViewHolder> toBeSnapped = new ArrayList<>();
+    public void prepareThanos(RecyclerView.ViewHolder viewHolder) {
+        if (viewHolder == null) return;
+        toBeSnapped.add(viewHolder);
+        if (viewHolder.itemView instanceof ChatMessageCell) {
+            MessageObject msg = ((ChatMessageCell) viewHolder.itemView).getMessageObject();
+            if (msg != null) {
+                msg.deletedByThanos = true;
+            }
+        }
+    }
+
+    private Utilities.Callback0Return<Boolean> supportsThanosEffectContainer;
+    private Utilities.Callback0Return<ThanosEffect> getThanosEffectContainer;
+    public void setOnSnapMessage(
+        Utilities.Callback0Return<Boolean> supportsThanosEffectContainer,
+        Utilities.Callback0Return<ThanosEffect> getThanosEffectContainer
+    ) {
+        this.supportsThanosEffectContainer = supportsThanosEffectContainer;
+        this.getThanosEffectContainer = getThanosEffectContainer;
     }
 }
 

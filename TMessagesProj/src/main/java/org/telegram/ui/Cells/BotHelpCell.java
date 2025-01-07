@@ -41,6 +41,7 @@ import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tl.TL_bots;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.LinkPath;
 import org.telegram.ui.Components.LinkSpanDrawable;
@@ -109,7 +110,7 @@ public class BotHelpCell extends View {
         setText(bot, text, null, null);
     }
 
-    public void setText(boolean bot, String text, TLObject imageOrAnimation, TLRPC.BotInfo botInfo) {
+    public void setText(boolean bot, String text, TLObject imageOrAnimation, TL_bots.BotInfo botInfo) {
         boolean photoVisible = imageOrAnimation != null;
         boolean textVisible = !TextUtils.isEmpty(text);
         if ((text == null || text.length() == 0) && !photoVisible) {
@@ -176,7 +177,7 @@ public class BotHelpCell extends View {
             }
             MessageObject.addLinks(false, stringBuilder);
             if (bot) {
-                stringBuilder.setSpan(new TypefaceSpan(AndroidUtilities.getTypeface("fonts/rmedium.ttf")), 0, help.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                stringBuilder.setSpan(new TypefaceSpan(AndroidUtilities.bold()), 0, help.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
             Emoji.replaceEmoji(stringBuilder, Theme.chat_msgTextPaint.getFontMetricsInt(), AndroidUtilities.dp(20), false);
             try {
@@ -259,7 +260,7 @@ public class BotHelpCell extends View {
                         ClickableSpan span = pressedLink.getSpan();
                         if (span instanceof URLSpanNoUnderline) {
                             String url = ((URLSpanNoUnderline) span).getURL();
-                            if (url.startsWith("@") || url.startsWith("#") || url.startsWith("/")) {
+                            if (url.startsWith("@") || url.startsWith("#") || url.startsWith("/") || url.startsWith("$")) {
                                 if (delegate != null) {
                                     delegate.didPressUrl(url);
                                 }
@@ -385,10 +386,9 @@ public class BotHelpCell extends View {
     public void setAnimating(boolean animating) {
         this.animating = animating;
     }
-    
-    private int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+
+    private int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 
     private Drawable getThemedDrawable(String drawableKey) {

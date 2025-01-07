@@ -10,7 +10,6 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.ImageLocation;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
@@ -36,7 +35,7 @@ public class GroupCallInvitedCell extends FrameLayout {
 
     private Paint dividerPaint;
 
-    private String grayIconColor = Theme.key_voipgroup_mutedIcon;
+    private int grayIconColor = Theme.key_voipgroup_mutedIcon;
 
     private boolean needDivider;
 
@@ -54,7 +53,7 @@ public class GroupCallInvitedCell extends FrameLayout {
 
         nameTextView = new SimpleTextView(context);
         nameTextView.setTextColor(Theme.getColor(Theme.key_voipgroup_nameText));
-        nameTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        nameTextView.setTypeface(AndroidUtilities.bold());
         nameTextView.setTextSize(16);
         nameTextView.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
         addView(nameTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 20, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 54 : 67, 10, LocaleController.isRTL ? 67 : 54, 0));
@@ -63,7 +62,7 @@ public class GroupCallInvitedCell extends FrameLayout {
         statusTextView.setTextSize(15);
         statusTextView.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP);
         statusTextView.setTextColor(Theme.getColor(grayIconColor));
-        statusTextView.setText(LocaleController.getString("Invited", R.string.Invited));
+        statusTextView.setText(LocaleController.getString(R.string.Invited));
         addView(statusTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 20, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 54 : 67, 32, LocaleController.isRTL ? 67 : 54, 0));
 
         muteButton = new ImageView(context);
@@ -85,7 +84,7 @@ public class GroupCallInvitedCell extends FrameLayout {
 
     public void setData(int account, Long uid) {
         currentUser = MessagesController.getInstance(account).getUser(uid);
-        avatarDrawable.setInfo(currentUser);
+        avatarDrawable.setInfo(account, currentUser);
 
         String lastName = UserObject.getUserName(currentUser, account);
         nameTextView.setText(lastName);
@@ -99,10 +98,8 @@ public class GroupCallInvitedCell extends FrameLayout {
         invalidate();
     }
 
-    public void setGrayIconColor(String key, int value) {
-        if (!grayIconColor.equals(key)) {
-            grayIconColor = key;
-        }
+    public void setGrayIconColor(int key, int value) {
+        grayIconColor = key;
         muteButton.setColorFilter(new PorterDuffColorFilter(value, PorterDuff.Mode.MULTIPLY));
         statusTextView.setTextColor(value);
         Theme.setSelectorDrawableColor(muteButton.getDrawable(), value & 0x24ffffff, true);

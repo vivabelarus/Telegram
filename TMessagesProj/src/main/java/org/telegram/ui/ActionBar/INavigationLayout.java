@@ -5,21 +5,25 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+import android.util.SparseIntArray;
 import android.view.Menu;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.FrameLayout;
+
+import androidx.core.util.Supplier;
 
 import org.telegram.ui.Components.BackButtonMenu;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 public interface INavigationLayout {
     int REBUILD_FLAG_REBUILD_LAST = 1, REBUILD_FLAG_REBUILD_ONLY_LAST = 2;
 
     int FORCE_NOT_ATTACH_VIEW = -2;
+    int FORCE_ATTACH_VIEW_AS_FIRST = -3;
 
     boolean presentFragment(NavigationParams params);
     boolean checkTransitionAnimation();
@@ -37,6 +41,7 @@ public interface INavigationLayout {
     void setFragmentStackChangedListener(Runnable onFragmentStackChanged);
     boolean isTransitionAnimationInProgress();
     void resumeDelayedFragmentAnimation();
+    boolean allowSwipe();
 
     boolean isInPassivePreviewMode();
     void setInBubbleMode(boolean bubbleMode);
@@ -75,8 +80,17 @@ public interface INavigationLayout {
     List<BackButtonMenu.PulledDialog> getPulledDialogs();
     void setPulledDialogs(List<BackButtonMenu.PulledDialog> pulledDialogs);
 
-    static INavigationLayout newLayout(Context context) {
-        return new ActionBarLayout(context);
+    static INavigationLayout newLayout(Context context, boolean main) {
+        return new ActionBarLayout(context, main);
+    }
+
+    static INavigationLayout newLayout(Context context, boolean main, Supplier<BottomSheet> supplier) {
+        return new ActionBarLayout(context, main) {
+            @Override
+            public BottomSheet getBottomSheet() {
+                return supplier.get();
+            }
+        };
     }
 
     default void removeFragmentFromStack(BaseFragment fragment) {
@@ -137,6 +151,17 @@ public interface INavigationLayout {
 
     default BaseFragment getLastFragment() {
         return getFragmentStack().isEmpty() ? null : getFragmentStack().get(getFragmentStack().size() - 1);
+    }
+
+    default BaseFragment getSafeLastFragment() {
+        if (getFragmentStack().isEmpty()) return null;
+        for (int i = getFragmentStack().size() - 1; i >= 0; --i) {
+            BaseFragment fragment = getFragmentStack().get(i);
+            if (fragment == null || fragment.isFinishing() || fragment.isRemovingFromStack())
+                continue;
+            return fragment;
+        }
+        return null;
     }
 
     default void animateThemedValues(Theme.ThemeInfo theme, int accentId, boolean nightTheme, boolean instant) {
@@ -254,6 +279,25 @@ public interface INavigationLayout {
         }
     }
 
+    default Window getWindow() {
+        if (getParentActivity() != null) {
+            return getParentActivity().getWindow();
+        }
+        return null;
+    }
+
+    default BottomSheet getBottomSheet() {
+        return null;
+    }
+
+    void setIsSheet(boolean isSheet);
+
+    boolean isSheet();
+
+    void updateTitleOverlay();
+
+    void setWindow(Window window);
+
     interface INavigationLayoutDelegate {
         default boolean needPresentFragment(INavigationLayout layout, NavigationParams params) {
             return needPresentFragment(params.fragment, params.removeLast, params.noAnimation, layout);
@@ -337,6 +381,7 @@ public interface INavigationLayout {
         public final boolean instant;
         public boolean onlyTopFragment;
         public boolean applyTheme = true;
+        public boolean applyTrulyTheme = true;
         public Runnable afterStartDescriptionsAddedRunnable;
         public Runnable beforeAnimationRunnable;
         public Runnable afterAnimationRunnable;
@@ -357,8 +402,8 @@ public interface INavigationLayout {
     }
 
     class StartColorsProvider implements Theme.ResourcesProvider {
-        HashMap<String, Integer> colors = new HashMap<>();
-        String[] keysToSave = new String[] {
+        SparseIntArray colors = new SparseIntArray();
+        int[] keysToSave = new int[] {
                 Theme.key_chat_outBubble,
                 Theme.key_chat_outBubbleGradient1,
                 Theme.key_chat_outBubbleGradient2,
@@ -368,23 +413,36 @@ public interface INavigationLayout {
         };
 
         @Override
-        public Integer getColor(String key) {
-            return colors.get(key);
+        public int getColor(int key) {
+            int index = colors.indexOfKey(key);
+            if (index >= 0) {
+                return colors.valueAt(index);
+            }
+            return Theme.getColor(key);
         }
 
         @Override
-        public Integer getCurrentColor(String key) {
+        public int getCurrentColor(int key) {
             return colors.get(key);
         }
 
         public void saveColors(Theme.ResourcesProvider fragmentResourceProvider) {
             colors.clear();
-            for (String key : keysToSave) {
+            for (int key : keysToSave) {
                 colors.put(key, fragmentResourceProvider.getCurrentColor(key));
             }
         }
     }
 
+    void setNavigationBarColor(int color);
+
+    default int getBottomTabsHeight(boolean animated) {
+        return 0;
+    }
+
+    default BottomSheetTabs getBottomSheetTabs() {
+        return null;
+    }
     enum BackButtonState {
         BACK,
         MENU

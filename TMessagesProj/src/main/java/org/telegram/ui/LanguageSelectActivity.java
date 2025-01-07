@@ -10,8 +10,8 @@ package org.telegram.ui;
 
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.SharedPreferences;
 import android.graphics.Canvas;
+import android.text.TextUtils;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -99,7 +99,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
 
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle(LocaleController.getString("Language", R.string.Language));
+        actionBar.setTitle(LocaleController.getString(R.string.Language));
 
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
@@ -147,7 +147,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                 }
             }
         });
-        searchItem.setSearchFieldHint(LocaleController.getString("Search", R.string.Search));
+        searchItem.setSearchFieldHint(LocaleController.getString(R.string.Search));
 
         listAdapter = new ListAdapter(context, false);
         searchListViewAdapter = new ListAdapter(context, true);
@@ -157,7 +157,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
         FrameLayout frameLayout = (FrameLayout) fragmentView;
 
         emptyView = new EmptyTextProgressView(context);
-        emptyView.setText(LocaleController.getString("NoResult", R.string.NoResult));
+        emptyView.setText(LocaleController.getString(R.string.NoResult));
         emptyView.showTextView();
         emptyView.setShowAtCenter(true);
         frameLayout.addView(emptyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
@@ -206,13 +206,13 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                             showDialog(new PremiumFeatureBottomSheet(LanguageSelectActivity.this, PremiumPreviewFragment.PREMIUM_FEATURE_TRANSLATIONS, false));
                             return;
                         }
-                        MessagesController.getMainSettings(currentAccount).edit().putBoolean("translate_chat_button", value).apply();
+                        getMessagesController().getTranslateController().setChatTranslateEnabled(value);
                         NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.updateSearchSettings);
                         ((TextCheckCell) view).setChecked(value);
                     }
                     final boolean currentFullValue = getContextValue() || getChatValue();
                     if (currentFullValue != prevFullValue) {
-                        int start = 1 + (!getMessagesController().premiumLocked ? 1 : 0);
+                        int start = 1 + (!getMessagesController().premiumFeaturesBlocked() ? 1 : 0);
                         TextCheckCell last = null;
                         for (int i = 0; i < listView.getChildCount(); ++i) {
                             View child = listView.getChildAt(i);
@@ -239,7 +239,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                 }
                 boolean search = listView.getAdapter() == searchListViewAdapter;
                 if (!search) {
-                    position -= (7 - (!(getChatValue() || getContextValue()) ? 1 : 0) - (getMessagesController().premiumLocked ? 1 : 0));
+                    position -= (7 - (!(getChatValue() || getContextValue()) ? 1 : 0) - (getMessagesController().premiumFeaturesBlocked() ? 1 : 0));
                 }
                 LocaleController.LocaleInfo localeInfo;
                 if (search) {
@@ -277,7 +277,6 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
 
                     String langCode = localeInfo.pluralLangCode,
                             prevLangCode = prevLocale.pluralLangCode;
-                    SharedPreferences preferences = MessagesController.getGlobalMainSettings();
                     HashSet<String> selectedLanguages = RestrictedLanguagesSelectActivity.getRestrictedLanguages();
                     HashSet<String> newSelectedLanguages = new HashSet<String>(selectedLanguages);
 
@@ -287,7 +286,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                     if (langCode != null && !"null".equals(langCode)) {
                         newSelectedLanguages.add(langCode);
                     }
-                    preferences.edit().putStringSet("translate_button_restricted_languages", newSelectedLanguages).apply();
+                    RestrictedLanguagesSelectActivity.updateRestrictedLanguages(newSelectedLanguages, false);
                     MessagesController.getInstance(currentAccount).getTranslateController().checkRestrictedLanguagesUpdate();
                     MessagesController.getInstance(currentAccount).getTranslateController().cleanup();
 
@@ -305,7 +304,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                 }
                 boolean search = listView.getAdapter() == searchListViewAdapter;
                 if (!search) {
-                    position -= (7 - (!(getChatValue() || getContextValue()) ? 1 : 0) - (getMessagesController().premiumLocked ? 1 : 0));
+                    position -= (7 - (!(getChatValue() || getContextValue()) ? 1 : 0) - (getMessagesController().premiumFeaturesBlocked() ? 1 : 0));
                 }
                 LocaleController.LocaleInfo localeInfo;
                 if (search) {
@@ -323,9 +322,9 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                 }
                 final LocaleController.LocaleInfo finalLocaleInfo = localeInfo;
                 AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-                builder.setTitle(LocaleController.getString("DeleteLocalizationTitle", R.string.DeleteLocalizationTitle));
+                builder.setTitle(LocaleController.getString(R.string.DeleteLocalizationTitle));
                 builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("DeleteLocalizationText", R.string.DeleteLocalizationText, localeInfo.name)));
-                builder.setPositiveButton(LocaleController.getString("Delete", R.string.Delete), (dialogInterface, i) -> {
+                builder.setPositiveButton(LocaleController.getString(R.string.Delete), (dialogInterface, i) -> {
                     if (LocaleController.getInstance().deleteLanguage(finalLocaleInfo, currentAccount)) {
                         fillLanguages();
                         if (searchResult != null) {
@@ -339,12 +338,12 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                         }
                     }
                 });
-                builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
+                builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
                 AlertDialog alertDialog = builder.create();
                 showDialog(alertDialog);
                 TextView button = (TextView) alertDialog.getButton(DialogInterface.BUTTON_POSITIVE);
                 if (button != null) {
-                    button.setTextColor(Theme.getColor(Theme.key_dialogTextRed));
+                    button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
                 }
             } catch (Exception e) {
                 FileLog.e(e);
@@ -409,6 +408,16 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
     }
 
     @Override
+    public void onBecomeFullyVisible() {
+        super.onBecomeFullyVisible();
+        LocaleController.getInstance().checkForcePatchLangpack(currentAccount, () -> {
+            if (!isPaused) {
+                updateLanguage();
+            }
+        });
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
         if (listAdapter != null) {
@@ -431,7 +440,10 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
 
     private void updateLanguage() {
         if (actionBar != null) {
-            actionBar.setTitleAnimated(LocaleController.getString("Language", R.string.Language), true, 350, CubicBezierInterpolator.EASE_OUT_QUINT);
+            String newTitle = LocaleController.getString(R.string.Language);
+            if (!TextUtils.equals(actionBar.getTitle(), newTitle)) {
+                actionBar.setTitleAnimated(newTitle, true, 350, CubicBezierInterpolator.EASE_OUT_QUINT);
+            }
         }
         if (listAdapter != null) {
             listAdapter.notifyItemRangeChanged(0, listAdapter.getItemCount());
@@ -529,7 +541,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                 if (!unofficialLanguages.isEmpty()) {
                     count += unofficialLanguages.size() + 1;
                 }
-                return 4 + (getMessagesController().premiumLocked ? 0 : 1) + (getChatValue() || getContextValue() ? 1 : 0) + 1 + count;
+                return 4 + (getMessagesController().premiumFeaturesBlocked() ? 0 : 1) + (getChatValue() || getContextValue() ? 1 : 0) + 1 + count;
             }
         }
 
@@ -582,7 +594,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
             switch (holder.getItemViewType()) {
                 case VIEW_TYPE_LANGUAGE: {
                     if (!search) {
-                        position -= (7 - (!(getChatValue() || getContextValue()) ? 1 : 0) - (getMessagesController().premiumLocked ? 1 : 0));
+                        position -= (7 - (!(getChatValue() || getContextValue()) ? 1 : 0) - (getMessagesController().premiumFeaturesBlocked() ? 1 : 0));
                     }
                     TextRadioCell textSettingsCell = (TextRadioCell) holder.itemView;
                     textSettingsCell.updateRTL();
@@ -607,7 +619,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                     }
                     if (localeInfo != null) {
                         if (localeInfo.isLocal()) {
-                            textSettingsCell.setTextAndValueAndCheck(String.format("%1$s (%2$s)", localeInfo.name, LocaleController.getString("LanguageCustom", R.string.LanguageCustom)), localeInfo.nameEnglish, false, false, !last);
+                            textSettingsCell.setTextAndValueAndCheck(String.format("%1$s (%2$s)", localeInfo.name, LocaleController.getString(R.string.LanguageCustom)), localeInfo.nameEnglish, false, false, !last);
                         } else {
                             textSettingsCell.setTextAndValueAndCheck(localeInfo.name, localeInfo.nameEnglish, false, false, !last);
                         }
@@ -620,9 +632,9 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                         position--;
                     ShadowSectionCell sectionCell = (ShadowSectionCell) holder.itemView;
                     if (!unofficialLanguages.isEmpty() && position == unofficialLanguages.size()) {
-                        sectionCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
+                        sectionCell.setBackgroundDrawable(Theme.getThemedDrawableByKey(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
                     } else {
-                        sectionCell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+                        sectionCell.setBackgroundDrawable(Theme.getThemedDrawableByKey(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
                     }
                     break;
                 }
@@ -630,7 +642,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                     TextSettingsCell settingsCell = (TextSettingsCell) holder.itemView;
                     settingsCell.updateRTL();
                     HashSet<String> langCodes = RestrictedLanguagesSelectActivity.getRestrictedLanguages();
-                    final String doNotTranslateCellName = LocaleController.getString("DoNotTranslate", R.string.DoNotTranslate);
+                    final String doNotTranslateCellName = LocaleController.getString(R.string.DoNotTranslate);
                     String doNotTranslateCellValue = null;
                     try {
                         boolean[] accusative = new boolean[1];
@@ -669,9 +681,10 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                     TextCheckCell cell = (TextCheckCell) holder.itemView;
                     cell.updateRTL();
                     if (position == 1) {
-                        cell.setTextAndCheck(LocaleController.getString("ShowTranslateButton", R.string.ShowTranslateButton), getContextValue(), true);
+                        cell.setTextAndCheck(LocaleController.getString(R.string.ShowTranslateButton), getContextValue(), true);
+                        cell.setCheckBoxIcon(0);
                     } else if (position == 2) {
-                        cell.setTextAndCheck(LocaleController.getString("ShowTranslateChatButton", R.string.ShowTranslateChatButton), getChatValue(), getContextValue() || getChatValue());
+                        cell.setTextAndCheck(LocaleController.getString(R.string.ShowTranslateChatButton), getChatValue(), getContextValue() || getChatValue());
                         cell.setCheckBoxIcon(!getUserConfig().isPremium() ? R.drawable.permission_locked : 0);
                     }
                     break;
@@ -679,22 +692,22 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
                 case VIEW_TYPE_INFO: {
                     TextInfoPrivacyCell infoCell = (TextInfoPrivacyCell) holder.itemView;
                     infoCell.updateRTL();
-                    if (position == (!getMessagesController().premiumLocked && (getContextValue() || getChatValue()) ? 4 : 3)) {
-                        infoCell.setText(LocaleController.getString("TranslateMessagesInfo1", R.string.TranslateMessagesInfo1));
-                        infoCell.setBackground(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+                    if (position == (!getMessagesController().premiumFeaturesBlocked() && (getContextValue() || getChatValue()) ? 4 : 3)) {
+                        infoCell.setText(LocaleController.getString(R.string.TranslateMessagesInfo1));
+                        infoCell.setBackground(Theme.getThemedDrawableByKey(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
                         infoCell.setTopPadding(11);
                         infoCell.setBottomPadding(16);
                     } else {
                         infoCell.setTopPadding(0);
                         infoCell.setBottomPadding(16);
-                        infoCell.setText(LocaleController.getString("TranslateMessagesInfo2", R.string.TranslateMessagesInfo2));
-                        infoCell.setBackground(Theme.getThemedDrawable(mContext, R.drawable.greydivider_top, Theme.key_windowBackgroundGrayShadow));
+                        infoCell.setText(LocaleController.getString(R.string.TranslateMessagesInfo2));
+                        infoCell.setBackground(Theme.getThemedDrawableByKey(mContext, R.drawable.greydivider_top, Theme.key_windowBackgroundGrayShadow));
                     }
                     break;
                 }
                 case VIEW_TYPE_HEADER: {
                     HeaderCell header = (HeaderCell) holder.itemView;
-                    header.setText(position == 0 ? LocaleController.getString("TranslateMessages", R.string.TranslateMessages) : LocaleController.getString("Language", R.string.Language));
+                    header.setText(position == 0 ? LocaleController.getString(R.string.TranslateMessages) : LocaleController.getString(R.string.Language));
                     break;
                 }
             }
@@ -707,7 +720,7 @@ public class LanguageSelectActivity extends BaseFragment implements Notification
             } else {
                 if (i-- == 0) return VIEW_TYPE_HEADER;
                 if (i-- == 0) return VIEW_TYPE_SWITCH;
-                if (!getMessagesController().premiumLocked) {
+                if (!getMessagesController().premiumFeaturesBlocked()) {
                     if (i-- == 0) return VIEW_TYPE_SWITCH;
                 }
                 if (getChatValue() || getContextValue()) {

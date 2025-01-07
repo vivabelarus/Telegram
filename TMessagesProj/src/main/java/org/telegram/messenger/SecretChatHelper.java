@@ -15,7 +15,10 @@ import android.text.TextUtils;
 import android.util.SparseArray;
 import android.util.SparseIntArray;
 
+import com.google.android.exoplayer2.util.Consumer;
+
 import org.telegram.SQLite.SQLiteCursor;
+import org.telegram.messenger.partisan.secretgroups.EncryptedGroupProtocol;
 import org.telegram.messenger.support.LongSparseIntArray;
 import org.telegram.tgnet.AbstractSerializedData;
 import org.telegram.tgnet.ConnectionsManager;
@@ -154,7 +157,7 @@ public class SecretChatHelper extends BaseController {
 
         ArrayList<TLRPC.Message> arr = new ArrayList<>();
         arr.add(newMsg);
-        getMessagesStorage().putMessages(arr, false, true, true, 0, false, 0);
+        getMessagesStorage().putMessages(arr, false, true, true, 0, false, 0, 0);
 
         return newMsg;
     }
@@ -244,6 +247,7 @@ public class SecretChatHelper extends BaseController {
                 getNotificationCenter().postNotificationName(NotificationCenter.encryptedChatUpdated, newChat);
             });
         }
+        AndroidUtilities.runOnUIThread(() -> new EncryptedGroupProtocol(currentAccount).processEncryptedChatUpdate(newChat));
         if (newChat instanceof TLRPC.TL_encryptedChatDiscarded && newChat.history_deleted) {
             AndroidUtilities.runOnUIThread(() -> getMessagesController().deleteDialog(dialog_id, 0));
         }
@@ -476,7 +480,7 @@ public class SecretChatHelper extends BaseController {
             newMsgObj.wasJustSent = true;
             ArrayList<MessageObject> objArr = new ArrayList<>();
             objArr.add(newMsgObj);
-            getMessagesController().updateInterfaceWithMessages(message.dialog_id, objArr, false);
+            getMessagesController().updateInterfaceWithMessages(message.dialog_id, objArr, 0);
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
         reqSend.random_id = message.random_id;
@@ -506,7 +510,7 @@ public class SecretChatHelper extends BaseController {
             newMsgObj.wasJustSent = true;
             ArrayList<MessageObject> objArr = new ArrayList<>();
             objArr.add(newMsgObj);
-            getMessagesController().updateInterfaceWithMessages(message.dialog_id, objArr, false);
+            getMessagesController().updateInterfaceWithMessages(message.dialog_id, objArr, 0);
             getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
         }
         reqSend.random_id = message.random_id;
@@ -534,7 +538,7 @@ public class SecretChatHelper extends BaseController {
                 ImageLoader.getInstance().replaceImageInCache(fileName, fileName2, ImageLocation.getForPhoto(size, newMsg.media.photo), true);
                 ArrayList<TLRPC.Message> arr = new ArrayList<>();
                 arr.add(newMsg);
-                getMessagesStorage().putMessages(arr, false, true, false, 0, false, 0);
+                getMessagesStorage().putMessages(arr, false, true, false, 0, false, 0, 0);
 
                 //getMessagesStorage().putSentFile(originalPath, newMsg.media.photo, 3);
             } else if (newMsg.media instanceof TLRPC.TL_messageMediaDocument && newMsg.media.document != null) {
@@ -568,7 +572,7 @@ public class SecretChatHelper extends BaseController {
 
                 ArrayList<TLRPC.Message> arr = new ArrayList<>();
                 arr.add(newMsg);
-                getMessagesStorage().putMessages(arr, false, true, false, 0, false, 0);
+                getMessagesStorage().putMessages(arr, false, true, false, 0, 0, 0);
             }
         }
     }
@@ -587,7 +591,7 @@ public class SecretChatHelper extends BaseController {
         }
     }
 
-    protected void performSendEncryptedRequest(TLRPC.DecryptedMessage req, TLRPC.Message newMsgObj, TLRPC.EncryptedChat chat, TLRPC.InputEncryptedFile encryptedFile, String originalPath, MessageObject newMsg) {
+    public void performSendEncryptedRequest(TLRPC.DecryptedMessage req, TLRPC.Message newMsgObj, TLRPC.EncryptedChat chat, TLRPC.InputEncryptedFile encryptedFile, String originalPath, MessageObject newMsg) {
         if (req == null || chat.auth_key == null || chat instanceof TLRPC.TL_encryptedChatRequested || chat instanceof TLRPC.TL_encryptedChatWaiting) {
             return;
         }
@@ -680,7 +684,7 @@ public class SecretChatHelper extends BaseController {
                 TLObject reqToSend;
 
                 if (encryptedFile == null) {
-                    if (req instanceof TLRPC.TL_decryptedMessageService) {
+                    if (req instanceof TLRPC.TL_decryptedMessageService || req instanceof org.telegram.messenger.partisan.secretgroups.EncryptedGroupsServiceMessage) {
                         TLRPC.TL_messages_sendEncryptedService req2 = new TLRPC.TL_messages_sendEncryptedService();
                         req2.data = data;
                         req2.random_id = req.random_id;
@@ -756,26 +760,21 @@ public class SecretChatHelper extends BaseController {
                             if (isSecretInvisibleMessage(newMsgObj)) {
                                 res.date = 0;
                             }
-                            getMessagesStorage().updateMessageStateAndId(newMsgObj.random_id, 0, newMsgObj.id, newMsgObj.id, res.date, false, 0);
+                            getMessagesStorage().updateMessageStateAndId(newMsgObj.random_id, 0, newMsgObj.id, newMsgObj.id, res.date, false, 0, 0);
                             AndroidUtilities.runOnUIThread(() -> {
                                 newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SENT;
                                 getNotificationCenter().postNotificationName(NotificationCenter.messageReceivedByServer, newMsgObj.id, newMsgObj.id, newMsgObj, newMsgObj.dialog_id, 0L, existFlags, false);
+                                getNotificationCenter().postNotificationName(NotificationCenter.messageReceivedByServer2, newMsgObj.id, newMsgObj.id, newMsgObj, newMsgObj.dialog_id, 0L, existFlags, false);
                                 getSendMessagesHelper().processSentMessage(newMsgObj.id);
-                                if (MessageObject.isVideoMessage(newMsgObj) || MessageObject.isNewGifMessage(newMsgObj) || MessageObject.isRoundVideoMessage(newMsgObj)) {
-                                    getSendMessagesHelper().stopVideoService(attachPath);
-                                }
                                 getSendMessagesHelper().removeFromSendingMessages(newMsgObj.id, false);
                             });
                         });
                     } else {
-                        getMessagesStorage().markMessageAsSendError(newMsgObj, false);
+                        getMessagesStorage().markMessageAsSendError(newMsgObj, 0);
                         AndroidUtilities.runOnUIThread(() -> {
                             newMsgObj.send_state = MessageObject.MESSAGE_SEND_STATE_SEND_ERROR;
                             getNotificationCenter().postNotificationName(NotificationCenter.messageSendError, newMsgObj.id);
                             getSendMessagesHelper().processSentMessage(newMsgObj.id);
-                            if (MessageObject.isVideoMessage(newMsgObj) || MessageObject.isNewGifMessage(newMsgObj) || MessageObject.isRoundVideoMessage(newMsgObj)) {
-                                getSendMessagesHelper().stopVideoService(newMsgObj.attachPath);
-                            }
                             getSendMessagesHelper().removeFromSendingMessages(newMsgObj.id, false);
                         });
                     }
@@ -965,7 +964,7 @@ public class SecretChatHelper extends BaseController {
                     }
                     newMessage.media.document.thumbs.add(photoSize);
                     newMessage.media.document.flags |= 1;
-                    TLRPC.TL_documentAttributeVideo attributeVideo = new TLRPC.TL_documentAttributeVideo();
+                    TLRPC.TL_documentAttributeVideo_layer159 attributeVideo = new TLRPC.TL_documentAttributeVideo_layer159();
                     attributeVideo.w = decryptedMessage.media.w;
                     attributeVideo.h = decryptedMessage.media.h;
                     attributeVideo.duration = decryptedMessage.media.duration;
@@ -1003,7 +1002,7 @@ public class SecretChatHelper extends BaseController {
                         for (int a = 0, N = newMessage.media.document.attributes.size(); a < N; a++) {
                             TLRPC.DocumentAttribute attribute = newMessage.media.document.attributes.get(a);
                             if (attribute instanceof TLRPC.TL_documentAttributeAudio || attribute instanceof TLRPC.TL_documentAttributeVideo) {
-                                newMessage.ttl = Math.max(attribute.duration + 1, newMessage.ttl);
+                                newMessage.ttl = (int) Math.max(attribute.duration + 1, newMessage.ttl);
                                 break;
                             }
                         }
@@ -1019,7 +1018,7 @@ public class SecretChatHelper extends BaseController {
                     }
                     byte[] thumb = ((TLRPC.TL_decryptedMessageMediaDocument) decryptedMessage.media).thumb;
                     TLRPC.PhotoSize photoSize;
-                    if (thumb != null && thumb.length != 0 && thumb.length <= 6000 && decryptedMessage.media.thumb_w <= 100 && decryptedMessage.media.thumb_h <= 100) {
+                    if (thumb != null && thumb.length != 0 && thumb.length <= 20000) {
                         photoSize = new TLRPC.TL_photoCachedSize();
                         photoSize.bytes = thumb;
                         photoSize.w = decryptedMessage.media.thumb_w;
@@ -1325,6 +1324,9 @@ public class SecretChatHelper extends BaseController {
                 } else {
                     return null;
                 }
+            } else if (object instanceof org.telegram.messenger.partisan.secretgroups.EncryptedGroupsServiceMessage) {
+                new org.telegram.messenger.partisan.secretgroups.EncryptedGroupProtocol(currentAccount)
+                        .handleServiceMessage(chat, (org.telegram.messenger.partisan.secretgroups.EncryptedGroupsServiceMessage)object);
             } else {
                 if (BuildVars.LOGS_ENABLED) {
                     FileLog.e("unknown message " + object);
@@ -1922,6 +1924,10 @@ public class SecretChatHelper extends BaseController {
     }
 
     public void startSecretChat(Context context, TLRPC.User user) {
+        startSecretChat(context, user, null);
+    }
+
+    public void startSecretChat(Context context, TLRPC.User user, Consumer<TLRPC.EncryptedChat> onComplete) {
         if (user == null || context == null) {
             return;
         }
@@ -2003,6 +2009,9 @@ public class SecretChatHelper extends BaseController {
                                     delayedEncryptedChatUpdates.clear();
                                 }
                             });
+                            if (onComplete != null) {
+                                onComplete.accept(chat);
+                            }
                         });
                     } else {
                         delayedEncryptedChatUpdates.clear();
@@ -2015,12 +2024,15 @@ public class SecretChatHelper extends BaseController {
                                     FileLog.e(e);
                                 }
                                 AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                                builder.setTitle(LocaleController.getString("AppName", R.string.AppName));
-                                builder.setMessage(LocaleController.getString("CreateEncryptedChatError", R.string.CreateEncryptedChatError));
-                                builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), null);
+                                builder.setTitle(LocaleController.getString(R.string.AppName));
+                                builder.setMessage(LocaleController.getString(R.string.CreateEncryptedChatError));
+                                builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
                                 builder.show().setCanceledOnTouchOutside(true);
                             }
                         });
+                        if (onComplete != null) {
+                            onComplete.accept(null);
+                        }
                     }
                 }, ConnectionsManager.RequestFlagFailOnServerErrors);
             } else {

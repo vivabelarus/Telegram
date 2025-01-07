@@ -43,8 +43,8 @@ public class PremiumTierCell extends ViewGroup {
     protected PremiumPreviewFragment.SubscriptionTier tier;
     protected TextView discountView;
 
-    private String colorKey1 = Theme.key_windowBackgroundWhite;
-    private String colorKey2 = Theme.key_windowBackgroundGray;
+    private int colorKey1 = Theme.key_windowBackgroundWhite;
+    private int colorKey2 = Theme.key_windowBackgroundGray;
     private int gradientWidth;
     private LinearGradient gradient;
     private Paint paint = new Paint();
@@ -72,7 +72,7 @@ public class PremiumTierCell extends ViewGroup {
         titleView = new TextView(context);
         titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
         titleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        titleView.setTypeface(AndroidUtilities.getTypeface(AndroidUtilities.TYPEFACE_ROBOTO_MEDIUM));
+        titleView.setTypeface(AndroidUtilities.bold());
         titleView.setSingleLine();
         addView(titleView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 0, 8, 0, 0));
 
@@ -80,7 +80,7 @@ public class PremiumTierCell extends ViewGroup {
         discountView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         discountView.setTextColor(Color.WHITE);
         discountView.setPadding(AndroidUtilities.dp(3), 0, AndroidUtilities.dp(3), 0);
-        discountView.setTypeface(AndroidUtilities.getTypeface(AndroidUtilities.TYPEFACE_ROBOTO_MEDIUM));
+        discountView.setTypeface(AndroidUtilities.bold());
         addView(discountView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.BOTTOM, 0, 0, 0, 8));
 
         pricePerYearStrikeView = new TextView(context);

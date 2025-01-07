@@ -242,11 +242,11 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
             searchEditText.setSingleLine(true);
             searchEditText.setImeOptions(EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
             if (type == 0) {
-                searchEditText.setHint(LocaleController.getString("SearchStickersHint", R.string.SearchStickersHint));
+                searchEditText.setHint(LocaleController.getString(R.string.SearchStickersHint));
             } else if (type == 1) {
-                searchEditText.setHint(LocaleController.getString("SearchEmojiHint", R.string.SearchEmojiHint));
+                searchEditText.setHint(LocaleController.getString(R.string.SearchEmojiHint));
             } else if (type == 2) {
-                searchEditText.setHint(LocaleController.getString("SearchGifsTitle", R.string.SearchGifsTitle));
+                searchEditText.setHint(LocaleController.getString(R.string.SearchGifsTitle));
             }
             searchEditText.setCursorColor(0xffffffff);
             searchEditText.setCursorSize(AndroidUtilities.dp(20));
@@ -313,7 +313,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
 
     public StickerMasksAlert(Context context, boolean isVideo, Theme.ResourcesProvider resourcesProvider) {
         super(context, true, resourcesProvider);
-        behindKeyboardColorKey = null;
+        behindKeyboardColorKey = -1;
         behindKeyboardColor = 0xff252525;
         useLightStatusBar = false;
         fixNavigationBar(0xff252525);
@@ -1132,13 +1132,13 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
         if (currentType == MediaDataController.TYPE_IMAGE && !favouriteStickers.isEmpty()) {
             favTabBum = stickersTabOffset;
             stickersTabOffset++;
-            stickersTab.addIconTab(1, stickerIcons[1]).setContentDescription(LocaleController.getString("FavoriteStickers", R.string.FavoriteStickers));
+            stickersTab.addIconTab(1, stickerIcons[1]).setContentDescription(LocaleController.getString(R.string.FavoriteStickers));
         }
 
         if (!recentStickers[typeIndex(currentType)].isEmpty()) {
             recentTabBum = stickersTabOffset;
             stickersTabOffset++;
-            stickersTab.addIconTab(0, stickerIcons[0]).setContentDescription(LocaleController.getString("RecentStickers", R.string.RecentStickers));
+            stickersTab.addIconTab(0, stickerIcons[0]).setContentDescription(LocaleController.getString(R.string.RecentStickers));
         }
 
         stickerSets[typeIndex(currentType)].clear();
@@ -1157,7 +1157,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
             if (thumb == null) {
                 thumb = document;
             }
-            stickersTab.addStickerTab(thumb, document, stickerSet).setContentDescription(stickerSet.set.title + ", " + LocaleController.getString("AccDescrStickerSet", R.string.AccDescrStickerSet));
+            stickersTab.addStickerTab(thumb, document, stickerSet).setContentDescription(stickerSet.set.title + ", " + LocaleController.getString(R.string.AccDescrStickerSet));
         }
         stickersTab.commitUpdate();
         stickersTab.updateTabStyles();
@@ -1381,10 +1381,12 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
             View view = null;
             switch (viewType) {
                 case -1:
-                    view = new ImageViewEmoji(context);
+                    ImageViewEmoji imageViewEmoji = new ImageViewEmoji(context);
+                    imageViewEmoji.getImageReceiver().setLayerNum(playingImagesLayerNum);
+                    view = imageViewEmoji;
                     break;
                 case 0:
-                    view = new StickerEmojiCell(context, false) {
+                    StickerEmojiCell stickerEmojiCell = new StickerEmojiCell(context, false, resourcesProvider) {
                         public void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                             if (currentType == MediaDataController.TYPE_EMOJIPACKS) {
                                 super.onMeasure(widthMeasureSpec, widthMeasureSpec);
@@ -1393,6 +1395,8 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
                             }
                         }
                     };
+                    stickerEmojiCell.getImageView().setLayerNum(playingImagesLayerNum);
+                    view = stickerEmojiCell;
                     break;
                 case 1:
                     view = new EmptyCell(context);
@@ -1474,9 +1478,9 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
                             cell.setText(set.set.title, 0);
                         }
                     } else if (object == recentStickers[typeIndex(currentType)]) {
-                        cell.setText(LocaleController.getString("RecentStickers", R.string.RecentStickers), 0);
+                        cell.setText(LocaleController.getString(R.string.RecentStickers), 0);
                     } else if (object == favouriteStickers) {
-                        cell.setText(LocaleController.getString("FavoriteStickers", R.string.FavoriteStickers), 0);
+                        cell.setText(LocaleController.getString(R.string.FavoriteStickers), 0);
                     }
                     break;
                 }
@@ -1907,10 +1911,12 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
             View view = null;
             switch (viewType) {
                 case -1:
-                    view = new ImageViewEmoji(context);
+                    ImageViewEmoji imageViewEmoji = new ImageViewEmoji(context);
+                    imageViewEmoji.getImageReceiver().setLayerNum(playingImagesLayerNum);
+                    view = imageViewEmoji;
                     break;
                 case 0:
-                    view = new StickerEmojiCell(context, false) {
+                    StickerEmojiCell cell = new StickerEmojiCell(context, false, resourcesProvider) {
                         public void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                             if (currentType == MediaDataController.TYPE_EMOJIPACKS) {
                                 super.onMeasure(widthMeasureSpec, widthMeasureSpec);
@@ -1919,6 +1925,8 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
                             }
                         }
                     };
+                    cell.getImageView().setLayerNum(playingImagesLayerNum);
+                    view = cell;
                     break;
                 case 1:
                     view = new EmptyCell(context);
@@ -1946,7 +1954,7 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
                     frameLayout.addView(imageView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 0, 0, 50));
 
                     TextView textView = new TextView(context);
-                    textView.setText(LocaleController.getString("NoStickersFound", R.string.NoStickersFound));
+                    textView.setText(LocaleController.getString(R.string.NoStickersFound));
                     textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
                     textView.setTextColor(0xff949ba1);
                     frameLayout.addView(textView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 0, 0, 0));
@@ -2110,5 +2118,11 @@ public class StickerMasksAlert extends BottomSheet implements NotificationCenter
             }
             super.notifyDataSetChanged();
         }
+    }
+
+    @Override
+    public void setImageReceiverNumLevel(int playingImages, int onShowing) {
+        super.setImageReceiverNumLevel(playingImages, onShowing);
+        stickersTab.setImageReceiversLayerNum(playingImages);
     }
 }

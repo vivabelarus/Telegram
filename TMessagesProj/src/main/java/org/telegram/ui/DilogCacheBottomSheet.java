@@ -47,7 +47,7 @@ public class DilogCacheBottomSheet extends BottomSheetWithRecyclerListView {
     }
 
     @Override
-    protected RecyclerListView.SelectionAdapter createAdapter() {
+    protected RecyclerListView.SelectionAdapter createAdapter(RecyclerListView listView) {
         return new RecyclerListView.SelectionAdapter() {
 
             @Override
@@ -72,7 +72,7 @@ public class DilogCacheBottomSheet extends BottomSheetWithRecyclerListView {
                     textInfoPrivacyCell.setFixedSize(12);
                     CombinedDrawable combinedDrawable = new CombinedDrawable(
                             new ColorDrawable(Theme.getColor(Theme.key_windowBackgroundGray)),
-                            Theme.getThemedDrawable(parent.getContext(), R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow)
+                            Theme.getThemedDrawableByKey(parent.getContext(), R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow)
                     );
                     combinedDrawable.setFullsize(true);
                     textInfoPrivacyCell.setBackgroundDrawable(combinedDrawable);
@@ -131,31 +131,34 @@ public class DilogCacheBottomSheet extends BottomSheetWithRecyclerListView {
         }
         linearLayout.addView(circleDiagramView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 16, 0, 16));
         CheckBoxCell lastCreatedCheckbox = null;
-        for (int a = 0; a < 7; a++) {
+        for (int a = 0; a < 8; a++) {
             long size = 0;
             String name;
-            String color;
+            int color;
 
             if (a == CacheControlActivity.TYPE_PHOTOS) {
-                name = LocaleController.getString("LocalPhotoCache", R.string.LocalPhotoCache);
+                name = LocaleController.getString(R.string.LocalPhotoCache);
                 color = Theme.key_statisticChartLine_lightblue;
             } else if (a == CacheControlActivity.TYPE_VIDEOS) {
-                name = LocaleController.getString("LocalVideoCache", R.string.LocalVideoCache);
+                name = LocaleController.getString(R.string.LocalVideoCache);
                 color = Theme.key_statisticChartLine_blue;
             } else if (a == CacheControlActivity.TYPE_DOCUMENTS) {
-                name = LocaleController.getString("LocalDocumentCache", R.string.LocalDocumentCache);
+                name = LocaleController.getString(R.string.LocalDocumentCache);
                 color = Theme.key_statisticChartLine_green;
             } else if (a == CacheControlActivity.TYPE_MUSIC) {
-                name = LocaleController.getString("LocalMusicCache", R.string.LocalMusicCache);
+                name = LocaleController.getString(R.string.LocalMusicCache);
                 color = Theme.key_statisticChartLine_red;
             } else if (a == CacheControlActivity.TYPE_VOICE) {
-                name = LocaleController.getString("LocalAudioCache", R.string.LocalAudioCache);
+                name = LocaleController.getString(R.string.LocalAudioCache);
                 color = Theme.key_statisticChartLine_lightgreen;
             } else if (a == CacheControlActivity.TYPE_ANIMATED_STICKERS_CACHE) {
-                name = LocaleController.getString("LocalStickersCache", R.string.LocalStickersCache);
+                name = LocaleController.getString(R.string.LocalStickersCache);
                 color = Theme.key_statisticChartLine_orange;
+            } else if (a == CacheControlActivity.TYPE_STORIES) {
+                name = LocaleController.getString(R.string.LocalStoriesCache);
+                color = Theme.key_statisticChartLine_indigo;
             } else {
-                name = LocaleController.getString("LocalMiscellaneousCache", R.string.LocalMiscellaneousCache);
+                name = LocaleController.getString(R.string.LocalMiscellaneousCache);
                 color = Theme.key_statisticChartLine_purple;
             }
             if (entities != null) {
@@ -169,7 +172,7 @@ public class DilogCacheBottomSheet extends BottomSheetWithRecyclerListView {
             if (size > 0) {
                 clearViewData[a] = new StorageDiagramView.ClearViewData(circleDiagramView);
                 clearViewData[a].size = size;
-                clearViewData[a].color = color;
+                clearViewData[a].colorKey = color;
                 CheckBoxCell checkBoxCell = new CheckBoxCell(context, 4, 21, null);
                 lastCreatedCheckbox = checkBoxCell;
                 checkBoxCell.setTag(a);
@@ -300,12 +303,12 @@ public class DilogCacheBottomSheet extends BottomSheetWithRecyclerListView {
         button = new CacheControlActivity.ClearCacheButton(getContext());
         button.button.setOnClickListener(v -> {
             AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
-            builder.setTitle(LocaleController.getString("ClearCache", R.string.ClearCache));
-            builder.setMessage(LocaleController.getString("ClearCacheForChat", R.string.ClearCacheForChat));
-            builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), (di, which) -> {
+            builder.setTitle(LocaleController.getString(R.string.ClearCache));
+            builder.setMessage(LocaleController.getString(R.string.ClearCacheForChat));
+            builder.setNegativeButton(LocaleController.getString(R.string.Cancel), (di, which) -> {
                 dismiss();
             });
-            builder.setPositiveButton(LocaleController.getString("Clear", R.string.Clear), (di, which) -> {
+            builder.setPositiveButton(LocaleController.getString(R.string.Clear), (di, which) -> {
                 dismiss();
                 cacheDelegate.cleanupDialogFiles(entities, clearViewData, cacheModel);
             });

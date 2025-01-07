@@ -217,7 +217,7 @@ public class PopupAudioView extends BaseCell implements SeekBar.SeekBarDelegate,
     private void didPressedButton() {
         if (buttonState == 0) {
             boolean result = MediaController.getInstance().playMessage(currentMessageObject);
-            if (!currentMessageObject.isOut() && currentMessageObject.isContentUnread()) {
+            if (!currentMessageObject.isOut() && (currentMessageObject.isContentUnread())) {
                 if (currentMessageObject.messageOwner.peer_id.channel_id == 0) {
                     MessagesController.getInstance(currentAccount).markMessageContentAsRead(currentMessageObject);
                     currentMessageObject.setContentIsRead();
@@ -258,7 +258,7 @@ public class PopupAudioView extends BaseCell implements SeekBar.SeekBarDelegate,
             for (int a = 0; a < currentMessageObject.getDocument().attributes.size(); a++) {
                 TLRPC.DocumentAttribute attribute = currentMessageObject.getDocument().attributes.get(a);
                 if (attribute instanceof TLRPC.TL_documentAttributeAudio) {
-                    duration = attribute.duration;
+                    duration = (int) attribute.duration;
                     break;
                 }
             }

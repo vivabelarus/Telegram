@@ -4,6 +4,8 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.text.TextPaint;
 import android.view.HapticFeedbackConstants;
@@ -42,8 +44,10 @@ public class SlideChooseView extends View {
 
     private String[] optionsStr;
     private int[] optionsSizes;
+    private Drawable[] leftDrawables;
 
     private int selectedIndex;
+    private int minIndex = Integer.MIN_VALUE;
     private float selectedIndexTouch;
     private AnimatedFloat selectedIndexAnimatedHolder = new AnimatedFloat(this, 120, CubicBezierInterpolator.DEFAULT);
     private AnimatedFloat movingAnimatedHolder = new AnimatedFloat(this, 150, CubicBezierInterpolator.DEFAULT);
@@ -96,13 +100,36 @@ public class SlideChooseView extends View {
     }
 
     public void setOptions(int selected, String... options) {
+        setOptions(selected, null, options);
+    }
+
+    public void setOptions(int selected, Drawable[] leftDrawables, String... options) {
         this.optionsStr = options;
+        this.leftDrawables = leftDrawables;
         selectedIndex = selected;
         optionsSizes = new int[optionsStr.length];
         for (int i = 0; i < optionsStr.length; i++) {
             optionsSizes[i] = (int) Math.ceil(textPaint.measureText(optionsStr[i]));
         }
+        if (this.leftDrawables != null) {
+            for (Drawable drawable : this.leftDrawables) {
+                drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
+            }
+        }
         requestLayout();
+    }
+
+    public void setMinAllowedIndex(int index) {
+        if (index != -1 && optionsStr != null) {
+            index = Math.min(index, optionsStr.length - 1);
+        }
+        if (minIndex != index) {
+            minIndex = index;
+            if (selectedIndex < index) {
+                selectedIndex = index;
+            }
+            invalidate();
+        }
     }
 
     public void setDashedFrom(int from) {
@@ -117,6 +144,9 @@ public class SlideChooseView extends View {
         boolean isClose = Math.abs(indexTouch - Math.round(indexTouch)) < .35f;
         if (isClose) {
             indexTouch = Math.round(indexTouch);
+        }
+        if (minIndex != Integer.MIN_VALUE) {
+            indexTouch = Math.max(indexTouch, minIndex);
         }
         if (event.getAction() == MotionEvent.ACTION_DOWN) {
             xTouchDown = x;
@@ -169,9 +199,7 @@ public class SlideChooseView extends View {
 
     private void setOption(int index) {
         if (selectedIndex != index) {
-            try {
-                performHapticFeedback(HapticFeedbackConstants.TEXT_HANDLE_MOVE, HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING);
-            } catch (Exception ignore) {}
+            AndroidUtilities.vibrateCursor(this);
         }
         selectedIndex = index;
         if (callback != null) {
@@ -186,7 +214,7 @@ public class SlideChooseView extends View {
         circleSize = AndroidUtilities.dp(6);
         gapSize = AndroidUtilities.dp(2);
         sideSide = AndroidUtilities.dp(22);
-        lineSize = (getMeasuredWidth() - circleSize * optionsStr.length - gapSize * 2 * (optionsStr.length - 1) - sideSide * 2) / (optionsStr.length - 1);
+        lineSize = (getMeasuredWidth() - circleSize * optionsStr.length - gapSize * 2 * (optionsStr.length - 1) - sideSide * 2) / Math.max(1, optionsStr.length - 1);
     }
 
     @Override
@@ -199,7 +227,7 @@ public class SlideChooseView extends View {
             int cx = sideSide + (lineSize + gapSize * 2 + circleSize) * a + circleSize / 2;
             float t = Math.max(0, 1f - Math.abs(a - selectedIndexAnimated));
             float ut = MathUtils.clamp(selectedIndexAnimated - a + 1f, 0, 1);
-            int color = ColorUtils.blendARGB(getThemedColor(Theme.key_switchTrack), getThemedColor(Theme.key_switchTrackChecked), ut);
+            int color = ColorUtils.blendARGB(getThemedColor(Theme.key_switchTrack), Theme.multAlpha(getThemedColor(Theme.key_switchTrackChecked), minIndex != Integer.MIN_VALUE && a <= minIndex ? .50f : 1.0f), ut);
             paint.setColor(color);
             linePaint.setColor(color);
             canvas.drawCircle(cx, cy, AndroidUtilities.lerp(circleSize / 2, AndroidUtilities.dp(6), t), paint);
@@ -227,12 +255,33 @@ public class SlideChooseView extends View {
             int size = optionsSizes[a];
             String text = optionsStr[a];
             textPaint.setColor(ColorUtils.blendARGB(getThemedColor(Theme.key_windowBackgroundWhiteGrayText), getThemedColor(Theme.key_windowBackgroundWhiteBlueText), t));
+
+            if (leftDrawables != null) {
+                canvas.save();
+                if (a == 0) {
+                    canvas.translate(AndroidUtilities.dp(12), AndroidUtilities.dp(15.5f));
+                } else if (a == optionsStr.length - 1) {
+                    canvas.translate(getMeasuredWidth() - size - AndroidUtilities.dp(22) - AndroidUtilities.dp(10), AndroidUtilities.dp(28) - AndroidUtilities.dp(12.5f));
+                } else {
+                    canvas.translate(cx - size / 2 - AndroidUtilities.dp(10), AndroidUtilities.dp(28) - AndroidUtilities.dp(12.5f));
+                }
+                leftDrawables[a].setColorFilter(textPaint.getColor(), PorterDuff.Mode.MULTIPLY);
+                leftDrawables[a].draw(canvas);
+                canvas.restore();
+                canvas.save();
+                canvas.translate((leftDrawables[a].getIntrinsicWidth() / 2f) - AndroidUtilities.dp(a == 0 ? 3 : 2), 0);
+            }
+
             if (a == 0) {
                 canvas.drawText(text, AndroidUtilities.dp(22), AndroidUtilities.dp(28), textPaint);
             } else if (a == optionsStr.length - 1) {
                 canvas.drawText(text, getMeasuredWidth() - size - AndroidUtilities.dp(22), AndroidUtilities.dp(28), textPaint);
             } else {
                 canvas.drawText(text, cx - size / 2, AndroidUtilities.dp(28), textPaint);
+            }
+
+            if (leftDrawables != null) {
+                canvas.restore();
             }
         }
 
@@ -258,9 +307,8 @@ public class SlideChooseView extends View {
         return selectedIndex;
     }
 
-    private int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+    private int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 
 

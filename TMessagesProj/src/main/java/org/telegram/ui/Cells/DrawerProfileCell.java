@@ -32,7 +32,6 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 
@@ -48,13 +47,11 @@ import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.NotificationCenter;
-import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.FileLog;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
-import org.telegram.messenger.fakepasscode.FakePasscode;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.Utilities;
 import org.telegram.messenger.fakepasscode.FakePasscodeUtils;
@@ -72,6 +69,7 @@ import org.telegram.ui.Components.Premium.StarParticlesView;
 import org.telegram.ui.Components.RLottieDrawable;
 import org.telegram.ui.Components.RLottieImageView;
 import org.telegram.ui.Components.Reactions.AnimatedEmojiEffect;
+import org.telegram.ui.Components.Reactions.HwEmojis;
 import org.telegram.ui.Components.Reactions.ReactionsLayoutInBubble;
 import org.telegram.ui.Components.SnowflakesEffect;
 import org.telegram.ui.ThemeActivity;
@@ -132,6 +130,38 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
                     animatedStatus.translate(AndroidUtilities.rectTmp2.centerX(), AndroidUtilities.rectTmp2.centerY());
                 }
             }
+
+            @Override
+            public void invalidate() {
+                if (HwEmojis.grab(this)) {
+                    return;
+                }
+                super.invalidate();
+            }
+
+            @Override
+            public void invalidate(int l, int t, int r, int b) {
+                if (HwEmojis.grab(this)) {
+                    return;
+                }
+                super.invalidate(l, t, r, b);
+            }
+
+            @Override
+            public void invalidateDrawable(Drawable who) {
+                if (HwEmojis.grab(this)) {
+                    return;
+                }
+                super.invalidateDrawable(who);
+            }
+
+            @Override
+            public void invalidate(Rect dirty) {
+                if (HwEmojis.grab(this)) {
+                    return;
+                }
+                super.invalidate(dirty);
+            }
         };
         nameTextView.setRightDrawableOnClick(e -> {
             if (lastUser != null && lastUser.premium) {
@@ -140,7 +170,7 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
         });
         nameTextView.setPadding(0, AndroidUtilities.dp(4), 0, AndroidUtilities.dp(4));
         nameTextView.setTextSize(15);
-        nameTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        nameTextView.setTypeface(AndroidUtilities.bold());
         nameTextView.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
         nameTextView.setEllipsizeByGradient(true);
         nameTextView.setRightDrawableOutside(true);
@@ -177,9 +207,9 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
             public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
                 super.onInitializeAccessibilityNodeInfo(info);
                 if (Theme.isCurrentThemeDark()) {
-                    info.setText(LocaleController.getString("AccDescrSwitchToDayTheme", R.string.AccDescrSwitchToDayTheme));
+                    info.setText(LocaleController.getString(R.string.AccDescrSwitchToDayTheme));
                 } else {
-                    info.setText(LocaleController.getString("AccDescrSwitchToNightTheme", R.string.AccDescrSwitchToNightTheme));
+                    info.setText(LocaleController.getString(R.string.AccDescrSwitchToNightTheme));
                 }
             }
         };
@@ -333,7 +363,7 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
                         (int) ((getMeasuredHeight() + renderedEffectsSize) / 2f)
                     );
                     effect.draw(canvas);
-                    if (effect.done()) {
+                    if (effect.isDone()) {
                         effect.removeView(this);
                         animations.remove(effect);
                     }
@@ -448,6 +478,7 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        status.attach();
         updateColors();
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.fakePasscodeActivated);
         NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
@@ -459,6 +490,7 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        status.detach();
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.fakePasscodeActivated);
         NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.emojiLoaded);
         for (int i = 0; i < UserConfig.MAX_ACCOUNT_COUNT; i++){
@@ -511,8 +543,8 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
     @Override
     protected void onDraw(Canvas canvas) {
         Drawable backgroundDrawable = Theme.getCachedWallpaper();
-        String backgroundKey = applyBackground(false);
-        boolean useImageBackground = !backgroundKey.equals(Theme.key_chats_menuTopBackground) && Theme.isCustomTheme() && !Theme.isPatternWallpaper() && backgroundDrawable != null && !(backgroundDrawable instanceof ColorDrawable) && !(backgroundDrawable instanceof GradientDrawable);
+        int backgroundKey = applyBackground(false);
+        boolean useImageBackground = backgroundKey != Theme.key_chats_menuTopBackground && Theme.isCustomTheme() && !Theme.isPatternWallpaper() && backgroundDrawable != null && !(backgroundDrawable instanceof ColorDrawable) && !(backgroundDrawable instanceof GradientDrawable);
         boolean drawCatsShadow = false;
         int color;
         int darkBackColor = 0;
@@ -598,7 +630,7 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
         drawPremiumProgress = Utilities.clamp(drawPremiumProgress, 1f, 0);
         if (drawPremiumProgress != 0) {
             if (gradientTools == null) {
-                gradientTools = new PremiumGradient.PremiumGradientTools(Theme.key_premiumGradientBottomSheet1, Theme.key_premiumGradientBottomSheet2, Theme.key_premiumGradientBottomSheet3, null);
+                gradientTools = new PremiumGradient.PremiumGradientTools(Theme.key_premiumGradientBottomSheet1, Theme.key_premiumGradientBottomSheet2, Theme.key_premiumGradientBottomSheet3, -1);
                 gradientTools.x1 = 0;
                 gradientTools.y1 = 1.1f;
                 gradientTools.x2 = 1.5f;
@@ -658,7 +690,7 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
         }
         accountsShown = accounts;
         setArrowState(false);
-        CharSequence text = UserObject.getUserName(user);
+        CharSequence text = UserObject.getUserName(user, account);
         try {
             text = Emoji.replaceEmoji(text, nameTextView.getPaint().getFontMetricsInt(), AndroidUtilities.dp(22), false);
         } catch (Exception ignore) {}
@@ -693,10 +725,10 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
         updateRightDrawable = true;
     }
 
-    public String applyBackground(boolean force) {
-        String currentTag = (String) getTag();
-        String backgroundKey = Theme.hasThemeKey(Theme.key_chats_menuTopBackground) && Theme.getColor(Theme.key_chats_menuTopBackground) != 0 ? Theme.key_chats_menuTopBackground : Theme.key_chats_menuTopBackgroundCats;
-        if (force || !backgroundKey.equals(currentTag)) {
+    public Integer applyBackground(boolean force) {
+        Integer currentTag = (Integer) getTag();
+        int backgroundKey = Theme.hasThemeKey(Theme.key_chats_menuTopBackground) && Theme.getColor(Theme.key_chats_menuTopBackground) != 0 ? Theme.key_chats_menuTopBackground : Theme.key_chats_menuTopBackgroundCats;
+        if (force || currentTag == null || backgroundKey != currentTag) {
             setBackgroundColor(Theme.getColor(backgroundKey));
             setTag(backgroundKey);
         }
@@ -723,7 +755,7 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
             arrowView.animate().cancel();
             arrowView.setRotation(rotation);
         }
-        arrowView.setContentDescription(accountsShown ? LocaleController.getString("AccDescrHideAccounts", R.string.AccDescrHideAccounts) : LocaleController.getString("AccDescrShowAccounts", R.string.AccDescrShowAccounts));
+        arrowView.setContentDescription(accountsShown ? LocaleController.getString(R.string.AccDescrHideAccounts) : LocaleController.getString(R.string.AccDescrShowAccounts));
     }
 
     @Override
@@ -763,5 +795,18 @@ public class DrawerProfileCell extends FrameLayout implements NotificationCenter
 
     public View getEmojiStatusDrawableParent() {
         return nameTextView;
+    }
+
+    public void updateSunDrawable(boolean toDark) {
+        if (sunDrawable != null) {
+            if (toDark) {
+                sunDrawable.setCustomEndFrame(36);
+            } else {
+                sunDrawable.setCustomEndFrame(0);
+            }
+        }
+        if (darkThemeView != null) {
+            darkThemeView.playAnimation();
+        }
     }
 }

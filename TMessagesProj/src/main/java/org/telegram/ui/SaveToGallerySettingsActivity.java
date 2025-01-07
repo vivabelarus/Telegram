@@ -181,7 +181,7 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
                 }
                 args.putBoolean("allowGlobalSearch", false);
                 DialogsActivity activity = new DialogsActivity(args);
-                activity.setDelegate((fragment, dids, message, param, topicsFragment) -> {
+                activity.setDelegate((fragment, dids, message, param, notify, scheduleDate, topicsFragment) -> {
                     Bundle args2 = new Bundle();
                     args2.putLong("dialog_id", dids.get(0).dialogId);
                     args2.putInt("type", type);
@@ -198,9 +198,9 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
                 presentFragment(addExceptionActivity);
             } else if (items.get(position).viewType == VIEW_TYPE_DELETE_ALL) {
                 AlertDialog alertDialog = AlertsCreator.createSimpleAlert(getContext(),
-                        LocaleController.getString("NotificationsDeleteAllExceptionTitle", R.string.NotificationsDeleteAllExceptionTitle),
-                        LocaleController.getString("NotificationsDeleteAllExceptionAlert", R.string.NotificationsDeleteAllExceptionAlert),
-                        LocaleController.getString("Delete", R.string.Delete),
+                        LocaleController.getString(R.string.NotificationsDeleteAllExceptionTitle),
+                        LocaleController.getString(R.string.NotificationsDeleteAllExceptionAlert),
+                        LocaleController.getString(R.string.Delete),
                         () -> {
                             exceptionsDialogs.clear();
                             getUserConfig().updateSaveGalleryExceptions(type, exceptionsDialogs);
@@ -215,9 +215,9 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
 
                 SaveToGallerySettingsHelper.DialogException exception = items.get(position).exception;
                 ActionBarPopupWindow.ActionBarPopupWindowLayout actionBarPopupWindowLayout = new ActionBarPopupWindow.ActionBarPopupWindowLayout(getContext());
-                ActionBarMenuSubItem edit = ActionBarMenuItem.addItem(actionBarPopupWindowLayout, R.drawable.msg_customize, LocaleController.getString("EditException", R.string.EditException), false, null);
-                ActionBarMenuSubItem delete = ActionBarMenuItem.addItem(actionBarPopupWindowLayout, R.drawable.msg_delete, LocaleController.getString("DeleteException", R.string.DeleteException), false, null);
-                delete.setColors(Theme.getColor(Theme.key_windowBackgroundWhiteRedText), Theme.getColor(Theme.key_windowBackgroundWhiteRedText));
+                ActionBarMenuSubItem edit = ActionBarMenuItem.addItem(actionBarPopupWindowLayout, R.drawable.msg_customize, LocaleController.getString(R.string.EditException), false, null);
+                ActionBarMenuSubItem delete = ActionBarMenuItem.addItem(actionBarPopupWindowLayout, R.drawable.msg_delete, LocaleController.getString(R.string.DeleteException), false, null);
+                delete.setColors(Theme.getColor(Theme.key_text_RedRegular), Theme.getColor(Theme.key_text_RedRegular));
                 ActionBarPopupWindow popupWindow = AlertsCreator.createSimplePopup(SaveToGallerySettingsActivity.this, actionBarPopupWindowLayout, view, x, y);
                 actionBarPopupWindowLayout.setParentWindow(popupWindow);
 
@@ -247,13 +247,13 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
             //  ((ViewGroup.MarginLayoutParams)recyclerListView.getLayoutParams()).bottomMargin = AndroidUtilities.dp()
 
             FrameLayout button = new FrameLayout(getContext());
-            button.setBackground(Theme.AdaptiveRipple.filledRect(Theme.key_featuredStickers_addButton, 8));
+            button.setBackground(Theme.AdaptiveRipple.filledRectByKey(Theme.key_featuredStickers_addButton, 8));
 
             TextView textView = new TextView(getContext());
             textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-            textView.setText(isNewException ? LocaleController.getString("AddException", R.string.AddException) : LocaleController.getString("SaveException", R.string.SaveException));
+            textView.setText(isNewException ? LocaleController.getString(R.string.AddException) : LocaleController.getString(R.string.SaveException));
             textView.setGravity(Gravity.CENTER);
-            textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            textView.setTypeface(AndroidUtilities.bold());
             textView.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
             button.addView(textView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
             button.setOnClickListener(v -> {
@@ -285,25 +285,25 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
             items.add(new Item(VIEW_TYPE_USER_INFO));
             items.add(new Item(VIEW_TYPE_DIVIDER));
         }
-        items.add(new Item(VIEW_TYPE_HEADER, LocaleController.getString("SaveToGallery", R.string.SaveToGallery)));
+        items.add(new Item(VIEW_TYPE_HEADER, LocaleController.getString(R.string.SaveToGallery)));
         savePhotosRow = items.size();
         items.add(new Item(VIEW_TYPE_TOGGLE));
         saveVideosRow = items.size();
         items.add(new Item(VIEW_TYPE_TOGGLE));
         String text = null;
         if (dialogException != null) {
-            text = LocaleController.getString("SaveToGalleryHintCurrent", R.string.SaveToGalleryHintCurrent);
+            text = LocaleController.getString(R.string.SaveToGalleryHintCurrent);
         } else if (type == SAVE_TO_GALLERY_FLAG_PEER) {
-            text = LocaleController.getString("SaveToGalleryHintUser", R.string.SaveToGalleryHintUser);
+            text = LocaleController.getString(R.string.SaveToGalleryHintUser);
         } else if (type == SAVE_TO_GALLERY_FLAG_CHANNELS) {
-            text = LocaleController.getString("SaveToGalleryHintChannels", R.string.SaveToGalleryHintChannels);
+            text = LocaleController.getString(R.string.SaveToGalleryHintChannels);
         } else if (type == SAVE_TO_GALLERY_FLAG_GROUP) {
-            text = LocaleController.getString("SaveToGalleryHintGroup", R.string.SaveToGalleryHintGroup);
+            text = LocaleController.getString(R.string.SaveToGalleryHintGroup);
         }
         items.add(new Item(VIEW_TYPE_DIVIDER_INFO, text));
 
         if (getSettings().saveVideo) {
-            items.add(new Item(VIEW_TYPE_HEADER, LocaleController.getString("MaxVideoSize", R.string.MaxVideoSize)));
+            items.add(new Item(VIEW_TYPE_HEADER, LocaleController.getString(R.string.MaxVideoSize)));
             items.add(new Item(VIEW_TYPE_CHOOSER));
             videoDividerRow = items.size();
             items.add(new Item(VIEW_TYPE_DIVIDER_INFO));
@@ -363,7 +363,7 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
                     break;
                 case VIEW_TYPE_ADD_EXCEPTION:
                     TextCell textCell = new TextCell(parent.getContext());
-                    textCell.setTextAndIcon(LocaleController.getString("NotificationsAddAnException", R.string.NotificationsAddAnException), R.drawable.msg_contact_add, true);
+                    textCell.setTextAndIcon(LocaleController.getString(R.string.NotificationsAddAnException), R.drawable.msg_contact_add, true);
                     textCell.setColors(Theme.key_windowBackgroundWhiteBlueIcon, Theme.key_windowBackgroundWhiteBlueButton);
                     view = textCell;
                     view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
@@ -377,8 +377,8 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
                     break;
                 case VIEW_TYPE_DELETE_ALL:
                     textCell = new TextCell(parent.getContext());
-                    textCell.setText(LocaleController.getString("NotificationsDeleteAllException", R.string.NotificationsDeleteAllException), false);
-                    textCell.setColors(null, Theme.key_windowBackgroundWhiteRedText5);
+                    textCell.setText(LocaleController.getString(R.string.NotificationsDeleteAllException), false);
+                    textCell.setColors(-1, Theme.key_text_RedRegular);
                     view = textCell;
                     view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
                     break;
@@ -404,7 +404,7 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
 
                     SelectableAnimatedTextView lowerTextView = new SelectableAnimatedTextView(getContext());
                     lowerTextView.setTextSize(AndroidUtilities.dp(13));
-                    lowerTextView.setText(AndroidUtilities.formatFileSize(1024 * 512, true));
+                    lowerTextView.setText(AndroidUtilities.formatFileSize(1024 * 512, true, false));
                     textContainer.addView(lowerTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.BOTTOM));
 
                     SelectableAnimatedTextView midTextView = new SelectableAnimatedTextView(getContext());
@@ -414,7 +414,7 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
 
                     SelectableAnimatedTextView topTextView = new SelectableAnimatedTextView(getContext());
                     topTextView.setTextSize(AndroidUtilities.dp(13));
-                    topTextView.setText(AndroidUtilities.formatFileSize(SaveToGallerySettingsHelper.MAX_VIDEO_LIMIT, true));
+                    topTextView.setText(AndroidUtilities.formatFileSize(SaveToGallerySettingsHelper.MAX_VIDEO_LIMIT, true, false));
                     textContainer.addView(topTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.BOTTOM));
 
 
@@ -455,7 +455,7 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
                             } else {
                                 midTextView.setText(
                                         LocaleController.formatString("UpToFileSize", R.string.UpToFileSize,
-                                                AndroidUtilities.formatFileSize(value, true)
+                                                AndroidUtilities.formatFileSize(value, true, false)
                                         ), false);
                                 lowerTextView.setSelectedInternal(false, animated);
                                 midTextView.setSelectedInternal(true, animated);
@@ -544,7 +544,7 @@ public class SaveToGallerySettingsActivity extends BaseFragment {
                 if (object instanceof TLRPC.User) {
                     TLRPC.User user = (TLRPC.User) object;
                     if (user.self) {
-                        title = LocaleController.getString("SavedMessages", R.string.SavedMessages);
+                        title = LocaleController.getString(R.string.SavedMessages);
                     } else {
                         title = ContactsController.formatName(user.first_name, user.last_name);
                     }

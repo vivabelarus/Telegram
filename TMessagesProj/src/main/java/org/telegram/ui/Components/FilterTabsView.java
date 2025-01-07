@@ -54,6 +54,8 @@ import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.fakepasscode.FakePasscodeUtils;
+import org.telegram.messenger.fakepasscode.results.RemoveChatsResult;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
@@ -70,14 +72,15 @@ public class FilterTabsView extends FrameLayout {
         return positionToStableId.get(selectedType, -1);
     }
 
-    public void selectTabWithStableId(int stableId) {
+    public boolean selectTabWithStableId(int stableId) {
         for (int i = 0; i < tabs.size(); i++) {
             if (positionToStableId.get(i, -1) == stableId) {
                 currentPosition = i;
                 selectedTabId = positionToId.get(i);
-                break;
+                return true;
             }
         }
+        return false;
     }
 
     public interface FilterTabsViewDelegate {
@@ -252,12 +255,12 @@ public class FilterTabsView extends FrameLayout {
                 );
                 canvas.rotate(1.4f * s, getMeasuredWidth() / 2f, getMeasuredHeight() / 2f);
             }
-            String key;
-            String animateToKey;
-            String otherKey;
-            String animateToOtherKey;
-            String unreadKey;
-            String unreadOtherKey;
+            int key;
+            int animateToKey;
+            int otherKey;
+            int animateToOtherKey;
+            int unreadKey;
+            int unreadOtherKey;
             int id1;
             int id2;
             if (manualScrollingToId != -1) {
@@ -282,7 +285,7 @@ public class FilterTabsView extends FrameLayout {
                 unreadKey = Theme.key_chats_tabUnreadUnactiveBackground;
                 unreadOtherKey = Theme.key_chats_tabUnreadActiveBackground;
             }
-            if (animateToKey == null) {
+            if (animateToKey < 0) {
                 if ((animatingIndicator || manualScrollingToId != -1) && (currentTab.id == id1 || currentTab.id == id2)) {
                     textPaint.setColor(ColorUtils.blendARGB(Theme.getColor(otherKey), Theme.getColor(key), animatingIndicatorProgress));
                 } else {
@@ -379,7 +382,7 @@ public class FilterTabsView extends FrameLayout {
             }
 
             if (animateCounterEnter || counterText != null || showRemove && (isEditing || editingStartAnimationProgress != 0)) {
-                if (aBackgroundColorKey == null) {
+                if (aBackgroundColorKey < 0) {
                     textCounterPaint.setColor(Theme.getColor(backgroundColorKey));
                 } else {
                     int color1 = Theme.getColor(backgroundColorKey);
@@ -510,7 +513,7 @@ public class FilterTabsView extends FrameLayout {
                 }
                 progressToLocked = Utilities.clamp(progressToLocked, 1f, 0);
                 int unactiveColor = Theme.getColor(unactiveTextColorKey);
-                if (aUnactiveTextColorKey != null) {
+                if (aUnactiveTextColorKey >= 0) {
                     unactiveColor = ColorUtils.blendARGB(unactiveColor, Theme.getColor(aUnactiveTextColorKey), animationValue);
                 }
                 if (lockDrawableColor != unactiveColor) {
@@ -533,6 +536,10 @@ public class FilterTabsView extends FrameLayout {
         }
 
         public boolean animateChange() {
+            if (isCountersJustChangedByFakePasscode()) {
+                return false;
+            }
+
             boolean changed = false;
             if (currentTab.counter != lastTabCount) {
                 animateTabCounter = true;
@@ -649,7 +656,7 @@ public class FilterTabsView extends FrameLayout {
             info.setSelected(currentTab != null && selectedTabId != -1 && currentTab.id == selectedTabId);
             info.addAction(AccessibilityNodeInfo.ACTION_CLICK);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, LocaleController.getString("AccDescrOpenMenu2", R.string.AccDescrOpenMenu2)));
+                info.addAction(new AccessibilityNodeInfo.AccessibilityAction(AccessibilityNodeInfo.ACTION_LONG_CLICK, LocaleController.getString(R.string.AccDescrOpenMenu2)));
             } else {
                 info.addAction(AccessibilityNodeInfo.ACTION_LONG_CLICK);
             }
@@ -740,15 +747,15 @@ public class FilterTabsView extends FrameLayout {
     private int scrollingToChild = -1;
     private GradientDrawable selectorDrawable;
 
-    private String tabLineColorKey = Theme.key_actionBarTabLine;
-    private String activeTextColorKey = Theme.key_actionBarTabActiveText;
-    private String unactiveTextColorKey = Theme.key_actionBarTabUnactiveText;
-    private String selectorColorKey = Theme.key_actionBarTabSelector;
-    private String backgroundColorKey = Theme.key_actionBarDefault;
-    private String aTabLineColorKey;
-    private String aActiveTextColorKey;
-    private String aUnactiveTextColorKey;
-    private String aBackgroundColorKey;
+    private int tabLineColorKey = Theme.key_actionBarTabLine;
+    private int activeTextColorKey = Theme.key_actionBarTabActiveText;
+    private int unactiveTextColorKey = Theme.key_actionBarTabUnactiveText;
+    private int selectorColorKey = Theme.key_actionBarTabSelector;
+    private int backgroundColorKey = Theme.key_actionBarDefault;
+    private int aTabLineColorKey = -1;
+    private int aActiveTextColorKey = -1;
+    private int aUnactiveTextColorKey = -1;
+    private int aBackgroundColorKey = -1;
 
     private int prevLayoutWidth;
 
@@ -823,9 +830,9 @@ public class FilterTabsView extends FrameLayout {
     public FilterTabsView(Context context) {
         super(context);
         textCounterPaint.setTextSize(AndroidUtilities.dp(13));
-        textCounterPaint.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textCounterPaint.setTypeface(AndroidUtilities.bold());
         textPaint.setTextSize(AndroidUtilities.dp(15));
-        textPaint.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textPaint.setTypeface(AndroidUtilities.bold());
         deletePaint.setStyle(Paint.Style.STROKE);
         deletePaint.setStrokeCap(Paint.Cap.ROUND);
         deletePaint.setStrokeWidth(AndroidUtilities.dp(1.5f));
@@ -1060,7 +1067,11 @@ public class FilterTabsView extends FrameLayout {
         return animatingIndicator;
     }
 
-    private void scrollToTab(Tab tab, int position) {
+    public void stopAnimatingIndicator() {
+        animatingIndicator = false;
+    }
+
+    public void scrollToTab(Tab tab, int position) {
         if (tab.isLocked) {
             if (delegate != null) {
                 delegate.onPageSelected(tab, false);
@@ -1097,6 +1108,17 @@ public class FilterTabsView extends FrameLayout {
             return;
         }
         scrollToTab(tabs.get(0), 0);
+    }
+
+    public boolean isFirstTab() {
+        return currentPosition <= 0;
+    }
+
+    public void selectLastTab() {
+        if (tabs.isEmpty()) {
+            return;
+        }
+        scrollToTab(tabs.get(tabs.size() - 1), tabs.size() - 1);
     }
 
     public void setAnimationIdicatorProgress(float value) {
@@ -1156,12 +1178,28 @@ public class FilterTabsView extends FrameLayout {
         tabs.add(tab);
     }
 
+    public int getTabsCount() {
+        return tabs.size();
+    }
+
+    public Tab getTab(int i) {
+        if (i < 0 || i >= getTabsCount()) {
+            return null;
+        }
+        return tabs.get(i);
+    }
+
     public void finishAddingTabs(boolean animated) {
+        RemoveChatsResult removeResult = FakePasscodeUtils.getJustActivatedRemoveChatsResult(UserConfig.selectedAccount);
+        if (removeResult != null && removeResult.hasHiddenFolders()) {
+            animated = false;
+        }
+
         listView.setItemAnimator(animated ? itemAnimator : null);
         adapter.notifyDataSetChanged();
     }
 
-    public void animateColorsTo(String line, String active, String unactive, String selector, String background) {
+    public void animateColorsTo(int line, int active, int unactive, int selector, int background) {
         if (colorChangeAnimator != null) {
             colorChangeAnimator.cancel();
         }
@@ -1182,10 +1220,10 @@ public class FilterTabsView extends FrameLayout {
                 backgroundColorKey = aBackgroundColorKey;
                 activeTextColorKey = aActiveTextColorKey;
                 unactiveTextColorKey = aUnactiveTextColorKey;
-                aTabLineColorKey = null;
-                aActiveTextColorKey = null;
-                aUnactiveTextColorKey = null;
-                aBackgroundColorKey = null;
+                aTabLineColorKey = -1;
+                aActiveTextColorKey = -1;
+                aUnactiveTextColorKey = -1;
+                aBackgroundColorKey = -1;
             }
         });
         colorChangeAnimator.start();
@@ -1199,7 +1237,7 @@ public class FilterTabsView extends FrameLayout {
         return positionToId.get(0, 0);
     }
 
-    public String getSelectorColorKey() {
+    public int getSelectorColorKey() {
         return selectorColorKey;
     }
 
@@ -1325,23 +1363,25 @@ public class FilterTabsView extends FrameLayout {
         if (!tabs.isEmpty()) {
             int width = MeasureSpec.getSize(widthMeasureSpec) - AndroidUtilities.dp(7) - AndroidUtilities.dp(7);
             Tab firstTab = findDefaultTab();
-            firstTab.setTitle(LocaleController.getString("FilterAllChats", R.string.FilterAllChats));
-            int tabWith = firstTab.getWidth(false);
-            firstTab.setTitle(allTabsWidth > width ? LocaleController.getString("FilterAllChatsShort", R.string.FilterAllChatsShort) : LocaleController.getString("FilterAllChats", R.string.FilterAllChats));
-            int trueTabsWidth = allTabsWidth - tabWith;
-            trueTabsWidth += firstTab.getWidth(false);
-            int prevWidth = additionalTabWidth;
-            additionalTabWidth = trueTabsWidth < width ? (width - trueTabsWidth) / tabs.size() : 0;
-            if (prevWidth != additionalTabWidth) {
-                ignoreLayout = true;
-                RecyclerView.ItemAnimator animator = listView.getItemAnimator();
-                listView.setItemAnimator(null);
-                adapter.notifyDataSetChanged();
-                listView.setItemAnimator(animator);
-                ignoreLayout = false;
+            if (firstTab != null) {
+                firstTab.setTitle(LocaleController.getString(R.string.FilterAllChats));
+                int tabWidth = firstTab.getWidth(false);
+                firstTab.setTitle(allTabsWidth > width ? LocaleController.getString(R.string.FilterAllChatsShort) : LocaleController.getString(R.string.FilterAllChats));
+                int trueTabsWidth = allTabsWidth - tabWidth;
+                trueTabsWidth += firstTab.getWidth(false);
+                int prevWidth = additionalTabWidth;
+                additionalTabWidth = trueTabsWidth < width ? (width - trueTabsWidth) / tabs.size() : 0;
+                if (prevWidth != additionalTabWidth) {
+                    ignoreLayout = true;
+                    RecyclerView.ItemAnimator animator = listView.getItemAnimator();
+                    listView.setItemAnimator(null);
+                    adapter.notifyDataSetChanged();
+                    listView.setItemAnimator(animator);
+                    ignoreLayout = false;
+                }
+                updateTabsWidths();
+                invalidated = false;
             }
-            updateTabsWidths();
-            invalidated = false;
         }
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
@@ -1453,6 +1493,11 @@ public class FilterTabsView extends FrameLayout {
         return isEditing;
     }
 
+    private boolean isCountersJustChangedByFakePasscode() {
+        RemoveChatsResult removeResult = FakePasscodeUtils.getJustActivatedRemoveChatsResult(UserConfig.selectedAccount);
+        return removeResult != null && (removeResult.hasRemovedChats() || removeResult.hasHiddenChats());
+    }
+
     public void setIsEditing(boolean value) {
         isEditing = value;
         editingForwardAnimation = true;
@@ -1461,7 +1506,7 @@ public class FilterTabsView extends FrameLayout {
         if (!isEditing && orderChanged) {
             MessagesStorage.getInstance(UserConfig.selectedAccount).saveDialogFiltersOrder();
             TLRPC.TL_messages_updateDialogFiltersOrder req = new TLRPC.TL_messages_updateDialogFiltersOrder();
-            ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).dialogFilters;
+            ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).getDialogFilters();
             for (int a = 0, N = filters.size(); a < N; a++) {
                 MessagesController.DialogFilter filter = filters.get(a);
                 if (filter.isDefault()) {
@@ -1491,7 +1536,7 @@ public class FilterTabsView extends FrameLayout {
                 invalidated = true;
                 requestLayout();
                 allTabsWidth = 0;
-                findDefaultTab().setTitle(LocaleController.getString("FilterAllChats", R.string.FilterAllChats));
+                findDefaultTab().setTitle(LocaleController.getString(R.string.FilterAllChats));
                 for (int b = 0; b < N; b++) {
                     allTabsWidth += tabs.get(b).getWidth(true) + AndroidUtilities.dp(32);
                 }
@@ -1499,7 +1544,9 @@ public class FilterTabsView extends FrameLayout {
             }
         }
         if (changed) {
-            listView.setItemAnimator(itemAnimator);
+            if (!isCountersJustChangedByFakePasscode()) {
+                listView.setItemAnimator(itemAnimator);
+            }
             adapter.notifyDataSetChanged();
         }
     }
@@ -1522,7 +1569,7 @@ public class FilterTabsView extends FrameLayout {
             listView.setItemAnimator(itemAnimator);
             adapter.notifyDataSetChanged();
             allTabsWidth = 0;
-            findDefaultTab().setTitle(LocaleController.getString("FilterAllChats", R.string.FilterAllChats));
+            findDefaultTab().setTitle(LocaleController.getString(R.string.FilterAllChats));
             for (int b = 0, N = tabs.size(); b < N; b++) {
                 allTabsWidth += tabs.get(b).getWidth(true) + AndroidUtilities.dp(32);
             }
@@ -1579,7 +1626,7 @@ public class FilterTabsView extends FrameLayout {
             if (idx1 < 0 || idx2 < 0 || idx1 >= count || idx2 >= count) {
                 return;
             }
-            ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).dialogFilters;
+            ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).getDialogFilters();
             MessagesController.DialogFilter filter1 = filters.get(idx1);
             MessagesController.DialogFilter filter2 = filters.get(idx2);
             int temp = filter1.order;
@@ -1633,7 +1680,7 @@ public class FilterTabsView extends FrameLayout {
             if (theIndex < 0 || theIndex >= count) {
                 return;
             }
-            ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).dialogFilters;
+            ArrayList<MessagesController.DialogFilter> filters = MessagesController.getInstance(UserConfig.selectedAccount).getDialogFilters();
             int temp = positionToStableId.get(theIndex),
                 temp2 = tabs.get(theIndex).id;
             for (int i = theIndex - 1; i >= 0; --i) {
@@ -1678,7 +1725,7 @@ public class FilterTabsView extends FrameLayout {
 
         @Override
         public int getMovementFlags(RecyclerView recyclerView, RecyclerView.ViewHolder viewHolder) {
-            if (MessagesController.getInstance(UserConfig.selectedAccount).premiumLocked && (!isEditing || (viewHolder.getAdapterPosition() == 0 && tabs.get(0).isDefault && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium()))) {
+            if (MessagesController.getInstance(UserConfig.selectedAccount).premiumFeaturesBlocked() && (!isEditing || (viewHolder.getAdapterPosition() == 0 && tabs.get(0).isDefault && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium()))) {
                 return makeMovementFlags(0, 0);
             }
             return makeMovementFlags(ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT, 0);
@@ -1686,7 +1733,7 @@ public class FilterTabsView extends FrameLayout {
 
         @Override
         public boolean onMove(RecyclerView recyclerView, RecyclerView.ViewHolder source, RecyclerView.ViewHolder target) {
-            if (MessagesController.getInstance(UserConfig.selectedAccount).premiumLocked && ((source.getAdapterPosition() == 0 || target.getAdapterPosition() == 0) && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium())) {
+            if (MessagesController.getInstance(UserConfig.selectedAccount).premiumFeaturesBlocked() && ((source.getAdapterPosition() == 0 || target.getAdapterPosition() == 0) && !UserConfig.getInstance(UserConfig.selectedAccount).isPremium())) {
                 return false;
             }
             adapter.swapElements(source.getAdapterPosition(), target.getAdapterPosition());

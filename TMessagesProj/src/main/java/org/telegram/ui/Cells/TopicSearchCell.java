@@ -32,7 +32,7 @@ public class TopicSearchCell extends FrameLayout {
         textView = new TextView(context);
         textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
-        textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textView.setTypeface(AndroidUtilities.bold());
 
         if (LocaleController.isRTL) {
             addView(backupImageView, LayoutHelper.createFrame(30, 30, Gravity.CENTER_VERTICAL | Gravity.RIGHT, 12, 0, 12, 0));
@@ -52,9 +52,9 @@ public class TopicSearchCell extends FrameLayout {
     public void setTopic(TLRPC.TL_forumTopic topic) {
         this.topic = topic;
         if (TextUtils.isEmpty(topic.searchQuery)) {
-            textView.setText(topic.title);
+            textView.setText(AndroidUtilities.removeDiacritics(topic.title));
         } else {
-            textView.setText(AndroidUtilities.highlightText(topic.title, topic.searchQuery, null));
+            textView.setText(AndroidUtilities.highlightText(AndroidUtilities.removeDiacritics(topic.title), topic.searchQuery, null));
         }
         ForumUtilities.setTopicIcon(backupImageView, topic);
         if (backupImageView != null && backupImageView.getImageReceiver() != null && backupImageView.getImageReceiver().getDrawable() instanceof ForumUtilities.GeneralTopicDrawable) {

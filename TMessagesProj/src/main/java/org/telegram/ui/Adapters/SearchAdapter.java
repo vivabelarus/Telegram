@@ -57,7 +57,7 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
     private ArrayList<Object> searchResult = new ArrayList<>();
     private ArrayList<CharSequence> searchResultNames = new ArrayList<>();
     private SearchAdapterHelper searchAdapterHelper;
-    private LongSparseArray<?> checkedMap;
+    private LongSparseArray<TLRPC.User> selectedUsers;
     private Timer searchTimer;
     private boolean allowUsernameSearch;
     private boolean useUserCell;
@@ -72,11 +72,13 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
     private int searchPointer;
     private ArrayList<ContactEntry> allUnregistredContacts;
     private ArrayList<ContactsController.Contact> unregistredContacts = new ArrayList<>();
+    private String lastQuery;
 
 
-    public SearchAdapter(Context context, LongSparseArray<TLRPC.User> arg1, boolean usernameSearch, boolean mutual, boolean chats, boolean bots, boolean self, boolean phones, int searchChannelId) {
+    public SearchAdapter(Context context, LongSparseArray<TLRPC.User> arg1, LongSparseArray<TLRPC.User> selected, boolean usernameSearch, boolean mutual, boolean chats, boolean bots, boolean self, boolean phones, int searchChannelId) {
         mContext = context;
         ignoreUsers = arg1;
+        selectedUsers = selected;
         onlyMutual = mutual;
         allowUsernameSearch = usernameSearch;
         allowChats = chats;
@@ -99,10 +101,6 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
                 return ignoreUsers;
             }
         });
-    }
-
-    public void setCheckedMap(LongSparseArray<?> map) {
-        checkedMap = map;
     }
 
     public void setUseUserCell(boolean value) {
@@ -143,6 +141,7 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
 
     private void processSearch(final String query) {
         AndroidUtilities.runOnUIThread(() -> {
+            lastQuery = query;
             if (allowUsernameSearch) {
                 searchAdapterHelper.queryServerSearch(query, true, allowChats, allowBots, allowSelf, false, channelId, allowPhoneNumbers, -1, 1);
             }
@@ -185,9 +184,9 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
                         names[1] = null;
                     }
                     if (UserObject.isReplyUser(user)) {
-                        names[2] = LocaleController.getString("RepliesTitle", R.string.RepliesTitle).toLowerCase();
+                        names[2] = LocaleController.getString(R.string.RepliesTitle).toLowerCase();
                     } else if (user.self) {
-                        names[2] = LocaleController.getString("SavedMessages", R.string.SavedMessages).toLowerCase();
+                        names[2] = LocaleController.getString(R.string.SavedMessages).toLowerCase();
                     }
 
                     int found = 0;
@@ -270,8 +269,8 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
     public int getItemCount() {
         unregistredContactsHeaderRow = -1;
         int count = searchResult.size();
-        unregistredContactsHeaderRow = count;
         if (!unregistredContacts.isEmpty()) {
+            unregistredContactsHeaderRow = count;
             count += unregistredContacts.size() + 1;
         }
 
@@ -341,9 +340,6 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
             case 0:
                 if (useUserCell) {
                     view = new UserCell(mContext, 1, 1, false);
-                    if (checkedMap != null) {
-                        ((UserCell) view).setChecked(false, false);
-                    }
                 } else {
                     view = new ProfileSearchCell(mContext);
                 }
@@ -372,7 +368,18 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
                     String un = null;
                     boolean self = false;
                     if (object instanceof TLRPC.User) {
-                        un = ((TLRPC.User) object).username;
+                        TLRPC.User user = (TLRPC.User) object;
+                        un = UserObject.getPublicUsername((TLRPC.User) object);
+                        if (un != null && lastQuery != null && !un.toLowerCase().contains(lastQuery.toLowerCase())) {
+                            if (user.usernames != null) {
+                                for (int i = 0; i < user.usernames.size(); ++i) {
+                                    TLRPC.TL_username u = user.usernames.get(i);
+                                    if (u != null && u.active && u.username.toLowerCase().contains(lastQuery.toLowerCase())) {
+                                        un = u.username;
+                                    }
+                                }
+                            }
+                        }
                         id = ((TLRPC.User) object).id;
                         self = ((TLRPC.User) object).self;
                     } else if (object instanceof TLRPC.Chat) {
@@ -419,16 +426,15 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
                     if (useUserCell) {
                         UserCell userCell = (UserCell) holder.itemView;
                         userCell.setData(object, name, username, 0);
-                        if (checkedMap != null) {
-                            userCell.setChecked(checkedMap.indexOfKey(id) >= 0, false);
-                        }
+                        userCell.setChecked(selectedUsers.indexOfKey(id) >= 0, false);
                     } else {
                         ProfileSearchCell profileSearchCell = (ProfileSearchCell) holder.itemView;
                         if (self) {
-                            name = LocaleController.getString("SavedMessages", R.string.SavedMessages);
+                            name = LocaleController.getString(R.string.SavedMessages);
                         }
                         profileSearchCell.setData(object, null, name, username, false, self);
                         profileSearchCell.useSeparator = (position != getItemCount() - 1 && position != searchResult.size() - 1);
+                        profileSearchCell.setChecked(selectedUsers.indexOfKey(id) >= 0, false);
                         /*if (ignoreUsers != null) {
                             if (ignoreUsers.containsKey(id)) {
                                 profileSearchCell.drawAlpha = 0.5f;
@@ -443,18 +449,18 @@ public class SearchAdapter extends RecyclerListView.SelectionAdapter {
             case 1: {
                 GraySectionCell cell = (GraySectionCell) holder.itemView;
                 if (position ==  unregistredContactsHeaderRow) {
-                    cell.setText(LocaleController.getString("InviteToTelegramShort", R.string.InviteToTelegramShort));
+                    cell.setText(LocaleController.getString(R.string.InviteToTelegramShort));
                 } else if (getItem(position) == null) {
-                    cell.setText(LocaleController.getString("GlobalSearch", R.string.GlobalSearch));
+                    cell.setText(LocaleController.getString(R.string.GlobalSearch));
                 } else {
-                    cell.setText(LocaleController.getString("PhoneNumberSearch", R.string.PhoneNumberSearch));
+                    cell.setText(LocaleController.getString(R.string.PhoneNumberSearch));
                 }
                 break;
             }
             case 2: {
                 String str = (String) getItem(position);
                 TextCell cell = (TextCell) holder.itemView;
-                cell.setColors(null, Theme.key_windowBackgroundWhiteBlueText2);
+                cell.setColors(-1, Theme.key_windowBackgroundWhiteBlueText2);
                 cell.setText(LocaleController.formatString("AddContactByPhone", R.string.AddContactByPhone, PhoneFormat.getInstance().format("+" + str)), false);
                 break;
             }

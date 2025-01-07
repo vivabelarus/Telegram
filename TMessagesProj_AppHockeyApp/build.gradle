@@ -16,17 +16,20 @@ configurations.all {
 
 dependencies {
     implementation project(':TMessagesProj')
+    implementation 'androidx.fragment:fragment:1.2.0'
     implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'androidx.core:core:1.10.1'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.1.5'
     implementation files('../TMessagesProj/libs/libgsaverification-client.aar')
 
     implementation "com.microsoft.appcenter:appcenter-distribute:3.3.1"
     implementation "com.microsoft.appcenter:appcenter-crashes:3.3.1"
+    implementation "com.microsoft.appcenter:appcenter-analytics:3.3.1"
 }
 
 android {
-    compileSdkVersion 33
-    buildToolsVersion '33.0.0'
+    compileSdkVersion 34
+    buildToolsVersion '34.0.0'
 
     defaultConfig.applicationId = APP_PACKAGE
 
@@ -73,7 +76,7 @@ android {
             applicationIdSuffix ".beta"
             minifyEnabled true
             multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro', '../TMessagesProj/proguard-rules-beta.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
         HA_public {
@@ -83,7 +86,17 @@ android {
             applicationIdSuffix ".beta"
             minifyEnabled true
             multiDexEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro'
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro', '../TMessagesProj/proguard-rules-beta.pro'
+            ndk.debugSymbolLevel = 'FULL'
+        }
+        HA_hardcore {
+            debuggable false
+            jniDebuggable false
+            signingConfig signingConfigs.debug
+            applicationIdSuffix ".beta"
+            minifyEnabled true
+            multiDexEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), '../TMessagesProj/proguard-rules.pro', '../TMessagesProj/proguard-rules-beta.pro'
             ndk.debugSymbolLevel = 'FULL'
         }
     }
@@ -92,6 +105,9 @@ android {
         manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest.xml'
     }
     sourceSets.HA_public {
+        manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest.xml'
+    }
+    sourceSets.HA_hardcore {
         manifest.srcFile '../TMessagesProj/config/debug/AndroidManifest.xml'
     }
 
@@ -143,7 +159,7 @@ android {
 
     defaultConfig {
         minSdkVersion 19
-        targetSdkVersion 31
+        targetSdkVersion 34
         versionName APP_VERSION_NAME
         ndkVersion "21.4.7075529"
 
@@ -154,7 +170,7 @@ android {
         externalNativeBuild {
             cmake {
                 version '3.10.2'
-                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-16', "-j=16"
+                arguments '-DANDROID_STL=c++_static', '-DANDROID_PLATFORM=android-16'
             }
         }
     }
@@ -162,6 +178,7 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    namespace 'org.telegram.messenger.regular'
 
     lintOptions {
         checkReleaseBuilds false

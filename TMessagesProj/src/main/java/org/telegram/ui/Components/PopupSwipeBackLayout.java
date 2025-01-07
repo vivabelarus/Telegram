@@ -10,7 +10,6 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.util.Log;
 import android.util.SparseIntArray;
 import android.view.GestureDetector;
 import android.view.Gravity;
@@ -24,7 +23,7 @@ import androidx.annotation.NonNull;
 import androidx.core.view.GestureDetectorCompat;
 
 import org.telegram.messenger.AndroidUtilities;
-import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.UserConfig;
 import org.telegram.ui.ActionBar.ActionBarMenuSlider;
 import org.telegram.ui.ActionBar.ActionBarPopupWindow;
@@ -56,7 +55,7 @@ public class PopupSwipeBackLayout extends FrameLayout {
     private ValueAnimator foregroundAnimator;
 
     private int currentForegroundIndex = -1;
-    private int notificationIndex;
+    private AnimationNotificationsLocker notificationsLocker = new AnimationNotificationsLocker();
     Theme.ResourcesProvider resourcesProvider;
 
     private int lastHeightReported = -1;
@@ -203,7 +202,7 @@ public class PopupSwipeBackLayout extends FrameLayout {
         p.updateAnimation = false;
         p.setBackScaleX(w / p.getMeasuredWidth());
         if (applyBackScaleY) {
-            p.setBackScaleY(h / p.getMeasuredHeight());
+            p.setBackScaleY(Math.min(1, h / p.getMeasuredHeight()));
         }
         p.updateAnimation = true;
 
@@ -294,7 +293,7 @@ public class PopupSwipeBackLayout extends FrameLayout {
         ValueAnimator val = ValueAnimator.ofFloat(transitionProgress, f).setDuration((long) (DURATION * Math.max(0.5f, Math.abs(transitionProgress - f) - Math.min(0.2f, flingVal))));
         val.setInterpolator(CubicBezierInterpolator.DEFAULT);
         int selectedAccount = UserConfig.selectedAccount;
-        notificationIndex = NotificationCenter.getInstance(selectedAccount).setAnimationInProgress(notificationIndex, null);
+        notificationsLocker.lock();
         val.addUpdateListener(animation -> {
             transitionProgress = (float) animation.getAnimatedValue();
             invalidateTransforms();
@@ -308,16 +307,25 @@ public class PopupSwipeBackLayout extends FrameLayout {
 
             @Override
             public void onAnimationEnd(Animator animation) {
-                NotificationCenter.getInstance(selectedAccount).onAnimationFinish(notificationIndex);
+                notificationsLocker.unlock();
                 transitionProgress = f;
                 if (f <= 0) {
                     currentForegroundIndex = -1;
                 }
                 invalidateTransforms();
                 isAnimationInProgress = false;
+
+                if (onForegroundOpen != null && Math.abs(f - 1f) < .01f) {
+                    onForegroundOpen.run();
+                }
             }
         });
         val.start();
+    }
+
+    private Runnable onForegroundOpen;
+    public void setOnForegroundOpenFinished(Runnable listener) {
+        onForegroundOpen = listener;
     }
 
     /**
@@ -358,15 +366,28 @@ public class PopupSwipeBackLayout extends FrameLayout {
         }
     }
 
+    public boolean stickToRight;
+    public void setStickToRight(boolean right) {
+        stickToRight = right;
+    }
+
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         for (int i = 0; i < getChildCount(); i++) {
             View ch = getChildAt(i);
             boolean shownFromBottom = ch.getLayoutParams() instanceof FrameLayout.LayoutParams && ((LayoutParams) ch.getLayoutParams()).gravity == Gravity.BOTTOM;
             if (shownFromBottom) {
-                ch.layout(0, bottom - top - ch.getMeasuredHeight(), ch.getMeasuredWidth(), bottom - top);
+                if (stickToRight) {
+                    ch.layout((right - left) - ch.getMeasuredWidth(), bottom - top - ch.getMeasuredHeight(), right - left, bottom - top);
+                } else {
+                    ch.layout(0, bottom - top - ch.getMeasuredHeight(), ch.getMeasuredWidth(), bottom - top);
+                }
             } else {
-                ch.layout(0, 0, ch.getMeasuredWidth(), ch.getMeasuredHeight());
+                if (stickToRight) {
+                    ch.layout((right - left) - ch.getMeasuredWidth(), 0, right - left, ch.getMeasuredHeight());
+                } else {
+                    ch.layout(0, 0, ch.getMeasuredWidth(), ch.getMeasuredHeight());
+                }
             }
         }
     }
@@ -408,7 +429,11 @@ public class PopupSwipeBackLayout extends FrameLayout {
         int s = canvas.save();
         mPath.rewind();
         int rad = AndroidUtilities.dp(6);
-        mRect.set(0, y, w, y + h);
+        if (stickToRight) {
+            mRect.set(getWidth() - w, y, getWidth(), y + h);
+        } else {
+            mRect.set(0, y, w, y + h);
+        }
         mPath.addRoundRect(mRect, rad, rad, Path.Direction.CW);
         canvas.clipPath(mPath);
         super.dispatchDraw(canvas);

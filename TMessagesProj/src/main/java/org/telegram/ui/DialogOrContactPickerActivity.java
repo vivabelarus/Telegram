@@ -89,7 +89,7 @@ public class DialogOrContactPickerActivity extends BaseFragment {
         args.putBoolean("resetDelegate", false);
         args.putInt("dialogsType", DialogsActivity.DIALOGS_TYPE_BLOCK);
         dialogsActivity = new DialogsActivity(args);
-        dialogsActivity.setDelegate((fragment, dids, message, param, topicsFragment) -> {
+        dialogsActivity.setDelegate((fragment, dids, message, param, notify, scheduleDate, topicsFragment) -> {
             if (dids.isEmpty()) {
                 return true;
             }
@@ -119,7 +119,7 @@ public class DialogOrContactPickerActivity extends BaseFragment {
     @Override
     public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
-        actionBar.setTitle(LocaleController.getString("BlockUserMultiTitle", R.string.BlockUserMultiTitle));
+        actionBar.setTitle(LocaleController.getString(R.string.BlockUserMultiTitle));
         if (AndroidUtilities.isTablet()) {
             actionBar.setOccupyStatusBar(false);
         }
@@ -159,7 +159,7 @@ public class DialogOrContactPickerActivity extends BaseFragment {
                 contactsActivity.getActionBar().setSearchFieldText(editText.getText().toString());
             }
         });
-        searchItem.setSearchFieldHint(LocaleController.getString("Search", R.string.Search));
+        searchItem.setSearchFieldHint(LocaleController.getString(R.string.Search));
 
         scrollSlidingTextTabStrip = new ScrollSlidingTextTabStrip(context);
         scrollSlidingTextTabStrip.setUseSameWidth(true);
@@ -506,6 +506,7 @@ public class DialogOrContactPickerActivity extends BaseFragment {
             viewPages[a].fragmentView = (FrameLayout) viewPages[a].parentFragment.getFragmentView();
             viewPages[a].actionBar = viewPages[a].parentFragment.getActionBar();
             viewPages[a].addView(viewPages[a].fragmentView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+            AndroidUtilities.removeFromParent(viewPages[a].actionBar);
             viewPages[a].addView(viewPages[a].actionBar, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
             viewPages[a].actionBar.setVisibility(View.GONE);
 
@@ -622,23 +623,23 @@ public class DialogOrContactPickerActivity extends BaseFragment {
             return;
         }
         AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-        builder.setTitle(LocaleController.getString("BlockUser", R.string.BlockUser));
+        builder.setTitle(LocaleController.getString(R.string.BlockUser));
         builder.setMessage(AndroidUtilities.replaceTags(LocaleController.formatString("AreYouSureBlockContact2", R.string.AreYouSureBlockContact2, ContactsController.formatName(user.first_name, user.last_name))));
-        builder.setPositiveButton(LocaleController.getString("BlockContact", R.string.BlockContact), (dialogInterface, i) -> {
+        builder.setPositiveButton(LocaleController.getString(R.string.BlockContact), (dialogInterface, i) -> {
             if (MessagesController.isSupportUser(user)) {
-                AlertsCreator.showSimpleToast(DialogOrContactPickerActivity.this, LocaleController.getString("ErrorOccurred", R.string.ErrorOccurred));
+                AlertsCreator.showSimpleToast(DialogOrContactPickerActivity.this, LocaleController.getString(R.string.ErrorOccurred));
             } else {
                 MessagesController.getInstance(currentAccount).blockPeer(user.id);
-                AlertsCreator.showSimpleToast(DialogOrContactPickerActivity.this, LocaleController.getString("UserBlocked", R.string.UserBlocked));
+                AlertsCreator.showSimpleToast(DialogOrContactPickerActivity.this, LocaleController.getString(R.string.UserBlocked));
             }
             finishFragment();
         });
-        builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog dialog = builder.create();
         showDialog(dialog);
         TextView button = (TextView) dialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (button != null) {
-            button.setTextColor(Theme.getColor(Theme.key_dialogTextRed));
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
         }
     }
 
@@ -646,8 +647,8 @@ public class DialogOrContactPickerActivity extends BaseFragment {
         if (scrollSlidingTextTabStrip == null) {
             return;
         }
-        scrollSlidingTextTabStrip.addTextTab(0, LocaleController.getString("BlockUserChatsTitle", R.string.BlockUserChatsTitle));
-        scrollSlidingTextTabStrip.addTextTab(1, LocaleController.getString("BlockUserContactsTitle", R.string.BlockUserContactsTitle));
+        scrollSlidingTextTabStrip.addTextTab(0, LocaleController.getString(R.string.BlockUserChatsTitle));
+        scrollSlidingTextTabStrip.addTextTab(1, LocaleController.getString(R.string.BlockUserContactsTitle));
         scrollSlidingTextTabStrip.setVisibility(View.VISIBLE);
         actionBar.setExtraHeight(AndroidUtilities.dp(44));
         int id = scrollSlidingTextTabStrip.getCurrentTabId();

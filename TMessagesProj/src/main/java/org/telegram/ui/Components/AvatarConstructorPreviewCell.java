@@ -2,8 +2,6 @@ package org.telegram.ui.Components;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.drawable.Drawable;
-import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.widget.FrameLayout;
@@ -23,6 +21,7 @@ import java.util.ArrayList;
 public class AvatarConstructorPreviewCell extends FrameLayout {
 
     private AnimatedEmojiDrawable animatedEmojiDrawable;
+    private AnimatedEmojiDrawable nextAnimatedEmojiDrawable;
     BackupImageView currentImage;
     BackupImageView nextImage;
 
@@ -39,13 +38,16 @@ public class AvatarConstructorPreviewCell extends FrameLayout {
     int emojiIndex = 0;
 
     float progressToNext = 1f;
+    private boolean isAllEmojiDrawablesLoaded;
 
     Runnable scheduleSwitchToNextRunnable = new Runnable() {
         @Override
         public void run() {
             AndroidUtilities.runOnUIThread(scheduleSwitchToNextRunnable, 1000);
             if (emojiList == null || emojiList.document_id.isEmpty() || progressToNext != 1f) {
-
+                return;
+            }
+            if (!isAllEmojiDrawablesLoaded && (nextAnimatedEmojiDrawable.getImageReceiver() == null || !nextAnimatedEmojiDrawable.getImageReceiver().hasImageLoaded())) {
                 return;
             }
             emojiIndex++;
@@ -70,6 +72,7 @@ public class AvatarConstructorPreviewCell extends FrameLayout {
             nextBackgroundDrawable.setColors(color1, color2, color3, color4);
 
             progressToNext = 0f;
+            preloadNextEmojiDrawable();
             invalidate();
         }
     };
@@ -118,6 +121,7 @@ public class AvatarConstructorPreviewCell extends FrameLayout {
         if (emojiList != null && !emojiList.document_id.isEmpty()) {
             animatedEmojiDrawable = new AnimatedEmojiDrawable(AnimatedEmojiDrawable.CACHE_TYPE_ALERT_PREVIEW_LARGE, currentAccount, emojiList.document_id.get(0));
             currentImage.setAnimatedEmojiDrawable(animatedEmojiDrawable);
+            preloadNextEmojiDrawable();
         }
 
         int color1 = AvatarConstructorFragment.defaultColors[backgroundIndex][0];
@@ -131,12 +135,25 @@ public class AvatarConstructorPreviewCell extends FrameLayout {
         textView = new TextView(context);
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
         textView.setTextColor(Theme.getColor(Theme.key_avatar_text));
-        textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textView.setTypeface(AndroidUtilities.bold());
         textView.setGravity(Gravity.CENTER);
-        textView.setText(LocaleController.getString("UseEmoji", R.string.UseEmoji));
+        textView.setText(LocaleController.getString(R.string.UseEmoji));
 
         addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 28, Gravity.BOTTOM, 10, 10, 10, 10));
 
+    }
+
+    private void preloadNextEmojiDrawable() {
+        if (isAllEmojiDrawablesLoaded) {
+            return;
+        }
+        int nextEmojiIndex = emojiIndex + 1;
+        if (nextEmojiIndex > emojiList.document_id.size() - 1) {
+            isAllEmojiDrawablesLoaded = true;
+            return;
+        }
+        nextAnimatedEmojiDrawable = new AnimatedEmojiDrawable(AnimatedEmojiDrawable.CACHE_TYPE_ALERT_PREVIEW_LARGE, currentAccount, emojiList.document_id.get(nextEmojiIndex));
+        nextAnimatedEmojiDrawable.preload();
     }
 
     @Override

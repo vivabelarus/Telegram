@@ -77,7 +77,7 @@ public class DialogsRequestedEmptyCell extends LinearLayout implements Notificat
         titleView.setGravity(Gravity.CENTER);
         titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
         titleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        titleView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        titleView.setTypeface(AndroidUtilities.bold());
         linearLayout.addView(titleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL | Gravity.TOP, 0, 6, 0, 0));
 
         subtitleView = new TextView(context);
@@ -88,10 +88,10 @@ public class DialogsRequestedEmptyCell extends LinearLayout implements Notificat
 
         buttonView = new TextView(context);
         buttonView.setGravity(Gravity.CENTER);
-        buttonView.setBackground(Theme.AdaptiveRipple.filledRect(Theme.key_featuredStickers_addButton, 8));
+        buttonView.setBackground(Theme.AdaptiveRipple.filledRectByKey(Theme.key_featuredStickers_addButton, 8));
         buttonView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         buttonView.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
-        buttonView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        buttonView.setTypeface(AndroidUtilities.bold());
         buttonView.setPadding(AndroidUtilities.dp(14), AndroidUtilities.dp(14), AndroidUtilities.dp(14), AndroidUtilities.dp(14));
         buttonView.setOnClickListener(e -> {
             onButtonClick();
@@ -109,18 +109,18 @@ public class DialogsRequestedEmptyCell extends LinearLayout implements Notificat
 
     public void set(TLRPC.RequestPeerType requestPeerType) {
         if (requestPeerType instanceof TLRPC.TL_requestPeerTypeBroadcast) {
-            titleView.setText(LocaleController.getString("NoSuchChannels", R.string.NoSuchChannels));
-            subtitleView.setText(LocaleController.getString("NoSuchChannelsInfo", R.string.NoSuchChannelsInfo));
+            titleView.setText(LocaleController.getString(R.string.NoSuchChannels));
+            subtitleView.setText(LocaleController.getString(R.string.NoSuchChannelsInfo));
             buttonView.setVisibility(View.VISIBLE);
-            buttonView.setText(LocaleController.getString("CreateChannelForThis", R.string.CreateChannelForThis));
+            buttonView.setText(LocaleController.getString(R.string.CreateChannelForThis));
         } else if (requestPeerType instanceof TLRPC.TL_requestPeerTypeChat) {
-            titleView.setText(LocaleController.getString("NoSuchGroups", R.string.NoSuchGroups));
-            subtitleView.setText(LocaleController.getString("NoSuchGroupsInfo", R.string.NoSuchGroupsInfo));
+            titleView.setText(LocaleController.getString(R.string.NoSuchGroups));
+            subtitleView.setText(LocaleController.getString(R.string.NoSuchGroupsInfo));
             buttonView.setVisibility(View.VISIBLE);
-            buttonView.setText(LocaleController.getString("CreateGroupForThis", R.string.CreateGroupForThis));
+            buttonView.setText(LocaleController.getString(R.string.CreateGroupForThis));
         } else {
-            titleView.setText(LocaleController.getString("NoSuchUsers", R.string.NoSuchUsers));
-            subtitleView.setText(LocaleController.getString("NoSuchUsersInfo", R.string.NoSuchUsersInfo));
+            titleView.setText(LocaleController.getString(R.string.NoSuchUsers));
+            subtitleView.setText(LocaleController.getString(R.string.NoSuchUsersInfo));
             buttonView.setVisibility(View.GONE);
         }
     }

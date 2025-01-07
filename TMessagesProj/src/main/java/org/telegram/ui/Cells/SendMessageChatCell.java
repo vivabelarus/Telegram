@@ -74,7 +74,7 @@ public class SendMessageChatCell extends FrameLayout {
         nameLayout.addView(nameTextView);
 
         checkBox = new CheckBox2(context, 21);
-        checkBox.setColor(null, Theme.key_windowBackgroundWhite, Theme.key_checkboxCheck);
+        checkBox.setColor(-1, Theme.key_windowBackgroundWhite, Theme.key_checkboxCheck);
         checkBox.setDrawUnchecked(false);
         checkBox.setDrawBackgroundAsArc(3);
         addView(checkBox, LayoutHelper.createFrame(24, 24, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 0 : 40, 33, LocaleController.isRTL ? 39 : 0, 0));
@@ -106,6 +106,8 @@ public class SendMessageChatCell extends FrameLayout {
             return DialogObject.makeEncryptedDialogId(((TLRPC.EncryptedChat) currentObject).id);
         } else if (currentObject instanceof TLRPC.Chat) {
             return -((TLRPC.Chat) currentObject).id;
+        } else if (currentObject instanceof Long) {
+            return (long) currentObject;
         } else {
             return 0;
         }
@@ -186,7 +188,7 @@ public class SendMessageChatCell extends FrameLayout {
                     return;
                 }
             }
-            avatarDrawable.setInfo(currentUser, currentAccount);
+            avatarDrawable.setInfo(currentAccount, currentUser);
             lastStatus = currentUser.status != null ? currentUser.status.expires : 0;
 
             if (currentName != null) {
@@ -216,7 +218,7 @@ public class SendMessageChatCell extends FrameLayout {
                 }
             }
 
-            avatarDrawable.setInfo(currentChat, currentAccount);
+            avatarDrawable.setInfo(currentAccount, currentChat);
 
             if (currentName != null) {
                 lastName = null;
@@ -235,7 +237,7 @@ public class SendMessageChatCell extends FrameLayout {
                 boolean continueUpdate = false;
                 if ((mask & MessagesController.UPDATE_MASK_STATUS) != 0) {
                     int newStatus = 0;
-                    if (currentUser.status != null) {
+                    if (currentUser != null && currentUser.status != null) {
                         newStatus = currentUser.status.expires;
                     }
                     if (newStatus != lastStatus) {
@@ -252,8 +254,8 @@ public class SendMessageChatCell extends FrameLayout {
                     return;
                 }
             }
-            avatarDrawable.setInfo(currentUser, currentAccount);
-            lastStatus = currentUser.status != null ? currentUser.status.expires : 0;
+            avatarDrawable.setInfo(currentAccount, currentUser);
+            lastStatus = currentUser != null && currentUser.status != null ? currentUser.status.expires : 0;
 
             if (currentName != null) {
                 lastName = null;
@@ -264,6 +266,11 @@ public class SendMessageChatCell extends FrameLayout {
             }
 
             avatarImageView.setForUserOrChat(currentUser, avatarDrawable);
+        } else if (currentObject instanceof Long) {
+            String name = UserObject.getUserName(null, currentAccount);
+            nameTextView.setText(name);
+            avatarDrawable.setInfo((long) currentObject, name, "");
+            avatarImageView.setForUserOrChat(null, avatarDrawable);
         }
     }
 

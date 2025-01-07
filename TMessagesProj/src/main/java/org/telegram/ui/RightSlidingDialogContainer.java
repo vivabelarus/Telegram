@@ -8,6 +8,7 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.VelocityTracker;
 import android.view.View;
@@ -19,6 +20,7 @@ import androidx.dynamicanimation.animation.SpringAnimation;
 import androidx.dynamicanimation.animation.SpringForce;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
@@ -39,7 +41,7 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
     float openedProgress = 0;
     boolean isOpenned;
     ValueAnimator openAnimator;
-    private int animationIndex = -1;
+    private AnimationNotificationsLocker notificationsLocker = new AnimationNotificationsLocker();
     private int currentAccount = UserConfig.selectedAccount;
     public static long fragmentDialogId;
     boolean isPaused;
@@ -90,10 +92,10 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
                     fragment.onTransitionAnimationEnd(true, false);
                     openedProgress = 1f;
                     updateOpenAnimationProgress();
-                    openAnimationFinished();
+                    openAnimationFinished(false);
                     return;
                 }
-                animationIndex = NotificationCenter.getInstance(currentAccount).setAnimationInProgress(animationIndex, null);
+                notificationsLocker.lock();
                 openAnimator = ValueAnimator.ofFloat(0, 1f);
                 openedProgress = 0;
                 openAnimationStarted(true);
@@ -110,11 +112,11 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
                             return;
                         }
                         openAnimator = null;
-                        NotificationCenter.getInstance(currentAccount).onAnimationFinish(animationIndex);
+                        notificationsLocker.unlock();
                         fragment.onTransitionAnimationEnd(true, false);
                         openedProgress = 1f;
                         updateOpenAnimationProgress();
-                        openAnimationFinished();
+                        openAnimationFinished(false);
                     }
                 });
                 openAnimator.setDuration(250);
@@ -144,7 +146,7 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
             oldFragment.onFragmentDestroy();
             removeView(oldFragment.getFragmentView());
             removeView(oldFragment.getActionBar());
-            NotificationCenter.getInstance(currentAccount).onAnimationFinish(animationIndex);
+            notificationsLocker.unlock();
             return;
         }
         if (replaceAnimation != null) {
@@ -153,7 +155,7 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
         currentFragment.onTransitionAnimationStart(true, false);
         replacingFragment = oldFragment;
         replaceAnimationInProgress = true;
-        animationIndex = NotificationCenter.getInstance(currentAccount).setAnimationInProgress(animationIndex, null);
+        notificationsLocker.lock();
         replaceAnimation = new SpringAnimation(new FloatValueHolder(0f));
         replaceAnimation.setSpring(new SpringForce(1000f)
                 .setStiffness(400f)
@@ -177,7 +179,7 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
             oldFragment.onFragmentDestroy();
             removeView(oldFragment.getFragmentView());
             removeView(oldFragment.getActionBar());
-            NotificationCenter.getInstance(currentAccount).onAnimationFinish(animationIndex);
+            notificationsLocker.unlock();
         });
         replaceAnimation.start();
     }
@@ -277,11 +279,11 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.needCheckSystemBarColors);
             }
 
-            openAnimationFinished();
+            openAnimationFinished(false);
 
             return;
         }
-        animationIndex = NotificationCenter.getInstance(currentAccount).setAnimationInProgress(animationIndex, null);
+        notificationsLocker.lock();
         openAnimator = ValueAnimator.ofFloat(openedProgress, 0);
         openAnimator.addUpdateListener(animation -> {
             openedProgress = (float) animation.getAnimatedValue();
@@ -296,7 +298,7 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
                 openAnimator = null;
                 openedProgress = 0;
                 updateOpenAnimationProgress();
-                NotificationCenter.getInstance(currentAccount).onAnimationFinish(animationIndex);
+                notificationsLocker.unlock();
                 if (currentFragment != null) {
                     currentFragment.onPause();
                     currentFragment.onFragmentDestroy();
@@ -305,7 +307,7 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
                     NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.needCheckSystemBarColors);
                 }
 
-                openAnimationFinished();
+                openAnimationFinished(false);
 
             }
         });
@@ -402,7 +404,7 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
                                     return;
                                 }
                                 openAnimator = null;
-                                openAnimationFinished();
+                                openAnimationFinished(true);
                             }
                         });
                         openAnimator.setDuration(250);
@@ -448,7 +450,7 @@ public abstract class RightSlidingDialogContainer extends FrameLayout {
         }
     }
 
-    public void openAnimationFinished() {
+    public void openAnimationFinished(boolean backward) {
 
     }
 

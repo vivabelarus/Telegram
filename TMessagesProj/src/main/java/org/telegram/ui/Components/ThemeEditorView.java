@@ -65,11 +65,11 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.Utilities;
 import org.telegram.ui.ActionBar.ActionBar;
-import org.telegram.ui.ActionBar.ActionBarLayout;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.BottomSheet;
 import org.telegram.ui.ActionBar.INavigationLayout;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.ActionBar.ThemeColors;
 import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Cells.TextColorThemeCell;
 import org.telegram.ui.LaunchActivity;
@@ -214,7 +214,7 @@ public class ThemeEditorView {
                 searchEditText.setLines(1);
                 searchEditText.setSingleLine(true);
                 searchEditText.setImeOptions(EditorInfo.IME_ACTION_SEARCH | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
-                searchEditText.setHint(LocaleController.getString("Search", R.string.Search));
+                searchEditText.setHint(LocaleController.getString(R.string.Search));
                 searchEditText.setCursorColor(0xff50a8eb);
                 searchEditText.setCursorSize(AndroidUtilities.dp(20));
                 searchEditText.setCursorWidth(1.5f);
@@ -245,12 +245,12 @@ public class ThemeEditorView {
                         String text = searchEditText.getText().toString();
                         if (text.length() != 0) {
                             if (searchEmptyView != null) {
-                                searchEmptyView.setText(LocaleController.getString("NoResult", R.string.NoResult));
+                                searchEmptyView.setText(LocaleController.getString(R.string.NoResult));
                             }
                         } else {
                             if (listView.getAdapter() != listAdapter) {
                                 int top = getCurrentTop();
-                                searchEmptyView.setText(LocaleController.getString("NoChats", R.string.NoChats));
+                                searchEmptyView.setText(LocaleController.getString(R.string.NoChats));
                                 searchEmptyView.showTextView();
                                 listView.setAdapter(listAdapter);
                                 listAdapter.notifyDataSetChanged();
@@ -344,7 +344,7 @@ public class ThemeEditorView {
                     colorEditText[a].setCursorWidth(1.5f);
                     colorEditText[a].setTextSize(TypedValue.COMPLEX_UNIT_DIP, 18);
                     colorEditText[a].setBackground(null);
-                    colorEditText[a].setLineColors(Theme.getColor(Theme.key_dialogInputField), Theme.getColor(Theme.key_dialogInputFieldActivated), Theme.getColor(Theme.key_dialogTextRed));
+                    colorEditText[a].setLineColors(Theme.getColor(Theme.key_dialogInputField), Theme.getColor(Theme.key_dialogInputFieldActivated), Theme.getColor(Theme.key_text_RedBold));
                     colorEditText[a].setMaxLines(1);
                     colorEditText[a].setTag(a);
                     colorEditText[a].setGravity(Gravity.CENTER);
@@ -578,8 +578,8 @@ public class ThemeEditorView {
                             int color = getColor();
                             for (int a = 0; a < currentThemeDesription.size(); a++) {
                                 ThemeDescription description = currentThemeDesription.get(a);
-                                String key = description.getCurrentKey();
-                                if (a == 0 && key.equals(Theme.key_chat_wallpaper) || key.equals(Theme.key_chat_wallpaper_gradient_to1) || key.equals(Theme.key_chat_wallpaper_gradient_to2) || key.equals(Theme.key_chat_wallpaper_gradient_to3) || key.equals(Theme.key_windowBackgroundWhite) || key.equals(Theme.key_windowBackgroundGray)) {
+                                int key = description.getCurrentKey();
+                                if (a == 0 && key == Theme.key_chat_wallpaper || key == Theme.key_chat_wallpaper_gradient_to1 || key == Theme.key_chat_wallpaper_gradient_to2 || key == Theme.key_chat_wallpaper_gradient_to3 || key == Theme.key_windowBackgroundWhite || key == Theme.key_windowBackgroundGray) {
                                     color = 0xff000000 | color;
                                 }
                                 currentThemeDesription.get(a).setColor(color, false);
@@ -801,7 +801,7 @@ public class ThemeEditorView {
                 currentThemeDesriptionPosition = position;
                 for (int a = 0; a < currentThemeDesription.size(); a++) {
                     ThemeDescription description = currentThemeDesription.get(a);
-                    if (description.getCurrentKey().equals(Theme.key_chat_wallpaper)) {
+                    if (description.getCurrentKey() == Theme.key_chat_wallpaper) {
                         wallpaperUpdater.showAlert(true);
                         return;
                     }
@@ -822,7 +822,7 @@ public class ThemeEditorView {
             searchEmptyView = new EmptyTextProgressView(context);
             searchEmptyView.setShowAtCenter(true);
             searchEmptyView.showTextView();
-            searchEmptyView.setText(LocaleController.getString("NoResult", R.string.NoResult));
+            searchEmptyView.setText(LocaleController.getString(R.string.NoResult));
             listView.setEmptyView(searchEmptyView);
             containerView.addView(searchEmptyView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT, 0, 52, 0, 0));
 
@@ -856,8 +856,8 @@ public class ThemeEditorView {
             closeButton.setGravity(Gravity.CENTER);
             closeButton.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_AUDIO_SELECTOR_COLOR, 0));
             closeButton.setPadding(AndroidUtilities.dp(18), 0, AndroidUtilities.dp(18), 0);
-            closeButton.setText(LocaleController.getString("CloseEditor", R.string.CloseEditor).toUpperCase());
-            closeButton.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            closeButton.setText(LocaleController.getString(R.string.CloseEditor).toUpperCase());
+            closeButton.setTypeface(AndroidUtilities.bold());
             bottomSaveLayout.addView(closeButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
             closeButton.setOnClickListener(v -> dismiss());
 
@@ -867,12 +867,12 @@ public class ThemeEditorView {
             saveButton.setGravity(Gravity.CENTER);
             saveButton.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_AUDIO_SELECTOR_COLOR, 0));
             saveButton.setPadding(AndroidUtilities.dp(18), 0, AndroidUtilities.dp(18), 0);
-            saveButton.setText(LocaleController.getString("SaveTheme", R.string.SaveTheme).toUpperCase());
-            saveButton.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            saveButton.setText(LocaleController.getString(R.string.SaveTheme).toUpperCase());
+            saveButton.setTypeface(AndroidUtilities.bold());
             bottomSaveLayout.addView(saveButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.RIGHT));
             saveButton.setOnClickListener(v -> {
                 Theme.saveCurrentTheme(themeInfo, true, false, false);
-                setOnDismissListener(null);
+                setOnDismissListener((OnDismissListener) null);
                 dismiss();
                 close();
             });
@@ -888,8 +888,8 @@ public class ThemeEditorView {
             cancelButton.setGravity(Gravity.CENTER);
             cancelButton.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_AUDIO_SELECTOR_COLOR, 0));
             cancelButton.setPadding(AndroidUtilities.dp(18), 0, AndroidUtilities.dp(18), 0);
-            cancelButton.setText(LocaleController.getString("Cancel", R.string.Cancel).toUpperCase());
-            cancelButton.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            cancelButton.setText(LocaleController.getString(R.string.Cancel).toUpperCase());
+            cancelButton.setTypeface(AndroidUtilities.bold());
             bottomLayout.addView(cancelButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
             cancelButton.setOnClickListener(v -> {
                 for (int a = 0; a < currentThemeDesription.size(); a++) {
@@ -908,8 +908,8 @@ public class ThemeEditorView {
             defaultButtom.setGravity(Gravity.CENTER);
             defaultButtom.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_AUDIO_SELECTOR_COLOR, 0));
             defaultButtom.setPadding(AndroidUtilities.dp(18), 0, AndroidUtilities.dp(18), 0);
-            defaultButtom.setText(LocaleController.getString("Default", R.string.Default).toUpperCase());
-            defaultButtom.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            defaultButtom.setText(LocaleController.getString(R.string.Default).toUpperCase());
+            defaultButtom.setTypeface(AndroidUtilities.bold());
             linearLayout.addView(defaultButtom, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
             defaultButtom.setOnClickListener(v -> {
                 for (int a = 0; a < currentThemeDesription.size(); a++) {
@@ -924,8 +924,8 @@ public class ThemeEditorView {
             saveButton.setGravity(Gravity.CENTER);
             saveButton.setBackgroundDrawable(Theme.createSelectorDrawable(Theme.ACTION_BAR_AUDIO_SELECTOR_COLOR, 0));
             saveButton.setPadding(AndroidUtilities.dp(18), 0, AndroidUtilities.dp(18), 0);
-            saveButton.setText(LocaleController.getString("Save", R.string.Save).toUpperCase());
-            saveButton.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            saveButton.setText(LocaleController.getString(R.string.Save).toUpperCase());
+            saveButton.setTypeface(AndroidUtilities.bold());
             linearLayout.addView(saveButton, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
             saveButton.setOnClickListener(v -> setColorPickerVisible(false));
         }
@@ -1175,9 +1175,8 @@ public class ThemeEditorView {
                     ArrayList<CharSequence> names = new ArrayList<>();
                     for (int a = 0, N = listAdapter.items.size(); a < N; a++) {
                         ArrayList<ThemeDescription> themeDescriptions = listAdapter.items.get(a);
-                        String key = themeDescriptions.get(0).getCurrentKey();
+                        String key = ThemeColors.getStringName(themeDescriptions.get(0).getCurrentKey());
                         String name = key.toLowerCase();
-                        int found = 0;
                         for (String q : search) {
                             if (name.contains(q)) {
                                 searchResults.add(themeDescriptions);
@@ -1279,7 +1278,7 @@ public class ThemeEditorView {
                     ArrayList<ThemeDescription> arrayList = searchResult.get(position - 1);
                     ThemeDescription description = arrayList.get(0);
                     int color;
-                    if (description.getCurrentKey().equals(Theme.key_chat_wallpaper)) {
+                    if (description.getCurrentKey() == Theme.key_chat_wallpaper) {
                         color = 0;
                     } else {
                         color = description.getSetColor();
@@ -1305,10 +1304,10 @@ public class ThemeEditorView {
 
             public ListAdapter(Context context, ArrayList<ThemeDescription> descriptions) {
                 this.context = context;
-                HashMap<String, ArrayList<ThemeDescription>> itemsMap = new HashMap<>();
+                HashMap<Integer, ArrayList<ThemeDescription>> itemsMap = new HashMap<>();
                 for (int a = 0, N = descriptions.size(); a < N; a++) {
                     ThemeDescription description = descriptions.get(a);
-                    String key = description.getCurrentKey();
+                    int key = description.getCurrentKey();
                     ArrayList<ThemeDescription> arrayList = itemsMap.get(key);
                     if (arrayList == null) {
                         arrayList = new ArrayList<>();
@@ -1364,7 +1363,7 @@ public class ThemeEditorView {
                     ArrayList<ThemeDescription> arrayList = items.get(position - 1);
                     ThemeDescription description = arrayList.get(0);
                     int color;
-                    if (description.getCurrentKey().equals(Theme.key_chat_wallpaper)) {
+                    if (description.getCurrentKey() == Theme.key_chat_wallpaper) {
                         color = 0;
                     } else {
                         color = description.getSetColor();
@@ -1518,6 +1517,7 @@ public class ThemeEditorView {
             windowLayoutParams.gravity = Gravity.TOP | Gravity.LEFT;
             windowLayoutParams.type = WindowManager.LayoutParams.LAST_APPLICATION_WINDOW;
             windowLayoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
+            AndroidUtilities.setPreferredMaxRefreshRate(windowManager, windowView, windowLayoutParams);
             windowManager.addView(windowView, windowLayoutParams);
         } catch (Exception e) {
             FileLog.e(e);
@@ -1609,6 +1609,7 @@ public class ThemeEditorView {
         if (parentActivity == null) {
             return;
         }
+        AndroidUtilities.setPreferredMaxRefreshRate(windowManager, windowView, windowLayoutParams);
         try {
             windowManager.addView(windowView, windowLayoutParams);
             hidden = false;

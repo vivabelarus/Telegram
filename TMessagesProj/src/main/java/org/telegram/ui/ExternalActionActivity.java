@@ -34,6 +34,7 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.fakepasscode.FakePasscodeUtils;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.AlertDialog;
@@ -48,7 +49,7 @@ import org.telegram.ui.Components.SizeNotifierFrameLayout;
 
 import java.util.ArrayList;
 
-public class ExternalActionActivity extends Activity implements INavigationLayout.INavigationLayoutDelegate {
+public class ExternalActionActivity extends Activity implements INavigationLayout.INavigationLayoutDelegate, NotificationCenter.NotificationCenterDelegate {
 
     private boolean finished;
     private static ArrayList<BaseFragment> mainFragmentsStack = new ArrayList<>();
@@ -75,7 +76,7 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setTheme(R.style.Theme_TMessages);
         getWindow().setBackgroundDrawableResource(R.drawable.transparent);
-        if (SharedConfig.passcodeEnabled() && !SharedConfig.allowScreenCapture) {
+        if (SharedConfig.passcodeEnabled() && !SharedConfig.allowScreenCapture && !SharedConfig.forceAllowScreenshots) {
             try {
                 getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE);
             } catch (Exception e) {
@@ -85,15 +86,15 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
 
         super.onCreate(savedInstanceState);
 
-        if (SharedConfig.passcodeEnabled() && SharedConfig.appLocked) {
+        if (SharedConfig.passcodeEnabled() && SharedConfig.isAppLocked()) {
             SharedConfig.lastPauseTime = (int) (SystemClock.elapsedRealtime() / 1000);
         }
 
-        AndroidUtilities.fillStatusBarHeight(this);
+        AndroidUtilities.fillStatusBarHeight(this, false);
         Theme.createDialogsResources(this);
         Theme.createChatResources(this, false);
 
-        actionBarLayout = INavigationLayout.newLayout(this);
+        actionBarLayout = INavigationLayout.newLayout(this, false);
 
         drawerLayoutContainer = new DrawerLayoutContainer(this);
         drawerLayoutContainer.setAllowOpenDrawer(false, false);
@@ -153,7 +154,7 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
 
             });
 
-            layersActionBarLayout = INavigationLayout.newLayout(this);
+            layersActionBarLayout = INavigationLayout.newLayout(this, false);
             layersActionBarLayout.setRemoveActionBarExtraHeight(true);
             layersActionBarLayout.setBackgroundView(shadowTablet);
             layersActionBarLayout.setUseAlphaAnimations(true);
@@ -198,13 +199,16 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
 
         handleIntent(getIntent(), false, savedInstanceState != null, false, UserConfig.selectedAccount, 0);
         needLayout();
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.appDidLogoutByAction);
+        NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.accountHidingChanged);
     }
 
     private void showPasscodeActivity() {
         if (passcodeView == null) {
             return;
         }
-        SharedConfig.appLocked = true;
+        SharedConfig.setAppLocked(true);
+        FakePasscodeUtils.updateLastPauseFakePasscodeTime();
         if (SecretMediaViewer.hasInstance() && SecretMediaViewer.getInstance().isVisible()) {
             SecretMediaViewer.getInstance().closePhoto(false, false);
         } else if (PhotoViewer.hasInstance() && PhotoViewer.getInstance().isVisible()) {
@@ -253,6 +257,9 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
             UserConfig.getInstance(intentAccount).saveConfig(false);
             return false;
         }
+        if (FakePasscodeUtils.isNeedSwitchAccount()) {
+            switchToAvailableAccountOrLogout();
+        }
         return true;
     }
 
@@ -285,9 +292,9 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
                     }
 
                     AlertDialog.Builder builder = new AlertDialog.Builder(ExternalActionActivity.this);
-                    builder.setTitle(LocaleController.getString("AppName", R.string.AppName));
-                    builder.setMessage(LocaleController.getString("PleaseLoginPassport", R.string.PleaseLoginPassport));
-                    builder.setPositiveButton(LocaleController.getString("OK", R.string.OK), null);
+                    builder.setTitle(LocaleController.getString(R.string.AppName));
+                    builder.setMessage(LocaleController.getString(R.string.PleaseLoginPassport));
+                    builder.setPositiveButton(LocaleController.getString(R.string.OK), null);
                     builder.show();
 
                     return true;
@@ -361,7 +368,7 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
                         try {
                             progressDialog.dismiss();
                             if ("APP_VERSION_OUTDATED".equals(error.text)) {
-                                AlertDialog dialog = AlertsCreator.showUpdateAppAlert(ExternalActionActivity.this, LocaleController.getString("UpdateAppAlert", R.string.UpdateAppAlert), true);
+                                AlertDialog dialog = AlertsCreator.showUpdateAppAlert(ExternalActionActivity.this, LocaleController.getString(R.string.UpdateAppAlert), true);
                                 if (dialog != null) {
                                     dialog.setOnDismissListener(dialog1 -> {
                                         setResult(RESULT_FIRST_USER, new Intent().putExtra("error", error.text));
@@ -442,6 +449,8 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
             lockRunnable = null;
         }
         finished = true;
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.appDidLogoutByAction);
+        NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.accountHidingChanged);
     }
 
     public void presentFragment(BaseFragment fragment) {
@@ -508,6 +517,7 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
     @Override
     protected void onPause() {
         super.onPause();
+        FakePasscodeUtils.updateLastPauseFakePasscodeTime();
         actionBarLayout.onPause();
         if (AndroidUtilities.isTablet()) {
             layersActionBarLayout.onPause();
@@ -573,7 +583,7 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
                     }
                 }
             };
-            if (SharedConfig.appLocked) {
+            if (SharedConfig.isAppLocked()) {
                 AndroidUtilities.runOnUIThread(lockRunnable, 1000);
             } else if (SharedConfig.getAutoLockIn() != 0) {
                 AndroidUtilities.runOnUIThread(lockRunnable, (long) SharedConfig.getAutoLockIn() * 1000 + 1000);
@@ -601,6 +611,7 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
     @Override
     public void onConfigurationChanged(android.content.res.Configuration newConfig) {
         AndroidUtilities.checkDisplaySize(this, newConfig);
+        AndroidUtilities.setPreferredMaxRefreshRate(getWindow());
         super.onConfigurationChanged(newConfig);
         fixLayout();
     }
@@ -672,6 +683,39 @@ public class ExternalActionActivity extends Activity implements INavigationLayou
         if (AndroidUtilities.isTablet()) {
             if (layout == layersActionBarLayout) {
                 actionBarLayout.rebuildAllFragmentViews(last, last);
+            }
+        }
+    }
+
+    @Override
+    public void didReceivedNotification(int id, int account, Object... args) {
+        if (id == NotificationCenter.appDidLogoutByAction || id == NotificationCenter.accountHidingChanged) {
+            boolean launchActivityObservesToo = NotificationCenter.getGlobalInstance()
+                    .getObservers(NotificationCenter.accountHidingChanged)
+                    .stream().anyMatch(o -> o instanceof LaunchActivity);
+            if (launchActivityObservesToo) {
+                NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.accountHidingChanged);
+                NotificationCenter.getGlobalInstance().removeObserver(this, NotificationCenter.appDidLogoutByAction);
+            } else if (FakePasscodeUtils.isNeedSwitchAccount()) {
+                switchToAvailableAccountOrLogout();
+            }
+        }
+    }
+
+    private void switchToAvailableAccountOrLogout() {
+        int account = -1;
+        for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
+            if (UserConfig.getInstance(a).isClientActivated() && !FakePasscodeUtils.isHideAccount(a)) {
+                account = a;
+                break;
+            }
+        }
+        if (account != -1) {
+            switchToAccount(account);
+        } else {
+            actionBarLayout.rebuildLogout();
+            if (AndroidUtilities.isTablet()) {
+                layersActionBarLayout.rebuildLogout();
             }
         }
     }

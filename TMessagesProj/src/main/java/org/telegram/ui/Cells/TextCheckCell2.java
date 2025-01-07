@@ -33,6 +33,7 @@ import org.telegram.ui.Components.Switch;
 
 public class TextCheckCell2 extends FrameLayout {
 
+    public int id;
     private TextView textView;
     private TextView valueTextView;
     private Switch checkBox;
@@ -52,7 +53,8 @@ public class TextCheckCell2 extends FrameLayout {
             animatedTextView.setTextSize(AndroidUtilities.dp(14));
             animatedTextView.getDrawable().setAllowCancel(true);
             animatedTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-            animatedTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            animatedTextView.setTypeface(AndroidUtilities.bold());
+            animatedTextView.setAnimationProperties(.4f, 0, 320, CubicBezierInterpolator.EASE_OUT_QUINT);
             collapseViewContainer.addView(animatedTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT,20));
 
             collapsedArrow = new View(getContext());
@@ -151,7 +153,7 @@ public class TextCheckCell2 extends FrameLayout {
         setWillNotDraw(!divider);
     }
 
-    public void setTextAndValueAndCheck(String text, String value, boolean checked, boolean multiline, boolean divider) {
+    public void setTextAndValueAndCheck(CharSequence text, CharSequence value, boolean checked, boolean multiline, boolean divider) {
         textView.setText(text);
         valueTextView.setText(value);
         checkBox.setChecked(checked, false);
@@ -188,10 +190,22 @@ public class TextCheckCell2 extends FrameLayout {
             textView.setAlpha(1.0f);
             valueTextView.setAlpha(1.0f);
             checkBox.setAlpha(1.0f);
+            if (animatedTextView != null) {
+                animatedTextView.setAlpha(1.0f);
+            }
+            if (collapsedArrow != null) {
+                collapsedArrow.setAlpha(1.0f);
+            }
         } else {
             checkBox.setAlpha(0.5f);
             textView.setAlpha(0.5f);
             valueTextView.setAlpha(0.5f);
+            if (animatedTextView != null) {
+                animatedTextView.setAlpha(0.6f);
+            }
+            if (collapsedArrow != null) {
+                collapsedArrow.setAlpha(0.6f);
+            }
         }
     }
 

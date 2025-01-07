@@ -32,6 +32,7 @@ import android.text.Spanned;
 import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.text.TextUtils;
+import android.util.SparseIntArray;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -105,6 +106,7 @@ import java.util.List;
 public class QrActivity extends BaseFragment {
 
     private static final ArrayMap<String, int[]> qrColorsMap = new ArrayMap<>();
+    private static final int LOGO_OPTIMAL_FRAME = 33;
     private static List<EmojiThemes> cachedThemes;
 
     static {
@@ -129,7 +131,7 @@ public class QrActivity extends BaseFragment {
     }
 
     private final ThemeResourcesProvider resourcesProvider = new ThemeResourcesProvider();
-    private final EmojiThemes homeTheme = EmojiThemes.createHomeQrTheme();
+    private final EmojiThemes homeTheme = EmojiThemes.createHomeQrTheme(currentAccount);
     private final Rect logoRect = new Rect();
     private final ArrayMap<String, Bitmap> emojiThemeDarkIcons = new ArrayMap<>();
     private int[] prevQrColors = null;
@@ -361,7 +363,7 @@ public class QrActivity extends BaseFragment {
 
         themesViewController.onCreate();
         themesViewController.setItemSelectedListener((theme, position) -> QrActivity.this.onItemSelected(theme, position, true));
-        themesViewController.titleView.setText(LocaleController.getString("QrCode", R.string.QrCode));
+        themesViewController.titleView.setText(LocaleController.getString(R.string.QrCode));
         themesViewController.progressView.setViewType(FlickerLoadingView.QR_TYPE);
         themesViewController.shareButton.setOnClickListener(v -> {
             themesViewController.shareButton.setClickable(false);
@@ -379,13 +381,14 @@ public class QrActivity extends BaseFragment {
             }
             fragmentView.postDelayed(() -> {
                 onItemSelected(currentTheme, 0, true);
+                logoImageView.getAnimatedDrawable().cacheFrame(LOGO_OPTIMAL_FRAME);
             }, 17);
         }, 25);
 
         fragmentView.postDelayed(() -> {
             firstOpen = false;
             if (cachedThemes == null || cachedThemes.isEmpty()) {
-                ChatThemeController.requestAllChatThemes(new ResultCallback<List<EmojiThemes>>() {
+                ChatThemeController.getInstance(currentAccount).requestAllChatThemes(new ResultCallback<List<EmojiThemes>>() {
                     @Override
                     public void onComplete(List<EmojiThemes> result) {
                         onDataLoaded(result);
@@ -485,11 +488,6 @@ public class QrActivity extends BaseFragment {
         if (getParentActivity() != null) {
             getParentActivity().getWindow().getDecorView().setSystemUiVisibility(prevSystemUiVisibility);
         }
-    }
-
-    @Override
-    public int getNavigationBarColor() {
-        return getThemedColor(Theme.key_windowBackgroundGray);
     }
 
     @Override
@@ -718,10 +716,8 @@ public class QrActivity extends BaseFragment {
 
         themeLayout.setVisibility(View.GONE);
         closeImageView.setVisibility(View.GONE);
-        logoImageView.stopAnimation();
+        logoImageView.setVisibility(View.GONE);
         RLottieDrawable drawable = logoImageView.getAnimatedDrawable();
-        int currentFrame = drawable.getCurrentFrame();
-        drawable.setCurrentFrame(33, false);
 
         if (qrView != null) {
             qrView.setForShare(true);
@@ -730,12 +726,13 @@ public class QrActivity extends BaseFragment {
         fragmentView.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY));
         fragmentView.layout(0, 0, width, height);
         fragmentView.draw(canvas);
+        drawable.setBounds(logoImageView.getLeft(), logoImageView.getTop(), logoImageView.getRight(), logoImageView.getBottom());
+        drawable.drawFrame(canvas, LOGO_OPTIMAL_FRAME);
         canvas.setBitmap(null);
 
         themeLayout.setVisibility(View.VISIBLE);
         closeImageView.setVisibility(View.VISIBLE);
-        drawable.setCurrentFrame(currentFrame, false);
-        logoImageView.playAnimation();
+        logoImageView.setVisibility(View.VISIBLE);
 
         ViewGroup parent = (ViewGroup) fragmentView.getParent();
         fragmentView.layout(0, 0, parent.getWidth(), parent.getHeight());
@@ -750,7 +747,7 @@ public class QrActivity extends BaseFragment {
                     .setType("image/*")
                     .putExtra(Intent.EXTRA_STREAM, uri);
             try {
-                Intent chooserIntent = Intent.createChooser(intent, LocaleController.getString("InviteByQRCode", R.string.InviteByQRCode));
+                Intent chooserIntent = Intent.createChooser(intent, LocaleController.getString(R.string.InviteByQRCode));
                 getParentActivity().startActivityForResult(chooserIntent, 500);
             } catch (ActivityNotFoundException ex) {
                 ex.printStackTrace();
@@ -780,15 +777,15 @@ public class QrActivity extends BaseFragment {
 
     private class ThemeResourcesProvider implements Theme.ResourcesProvider {
 
-        private HashMap<String, Integer> colors;
+        private SparseIntArray colors;
 
         void initColors(EmojiThemes theme, boolean isDark) {
             colors = theme.createColors(currentAccount, isDark ? 1 : 0);
         }
 
         @Override
-        public Integer getColor(String key) {
-            return colors != null ? colors.get(key) : null;
+        public int getColor(int key) {
+            return colors != null ? colors.get(key) : Theme.getColor(key);
         }
     }
 
@@ -1384,7 +1381,7 @@ public class QrActivity extends BaseFragment {
             titleView.setSingleLine(true);
             titleView.setTextColor(fragment.getThemedColor(Theme.key_dialogTextBlack));
             titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
-            titleView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            titleView.setTypeface(AndroidUtilities.bold());
             titleView.setPadding(AndroidUtilities.dp(21), AndroidUtilities.dp(6), AndroidUtilities.dp(21), AndroidUtilities.dp(8));
             rootLayout.addView(titleView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.TOP | Gravity.START, 0, 0, 62, 0));
 
@@ -1401,9 +1398,9 @@ public class QrActivity extends BaseFragment {
                 public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
                     super.onInitializeAccessibilityNodeInfo(info);
                     if (isCurrentThemeDark) {
-                        info.setText(LocaleController.getString("AccDescrSwitchToDayTheme", R.string.AccDescrSwitchToDayTheme));
+                        info.setText(LocaleController.getString(R.string.AccDescrSwitchToDayTheme));
                     } else {
-                        info.setText(LocaleController.getString("AccDescrSwitchToNightTheme", R.string.AccDescrSwitchToNightTheme));
+                        info.setText(LocaleController.getString(R.string.AccDescrSwitchToNightTheme));
                     }
                 }
             };
@@ -1460,18 +1457,19 @@ public class QrActivity extends BaseFragment {
             shareButton.setGravity(Gravity.CENTER);
             shareButton.setLines(1);
             shareButton.setSingleLine(true);
-            shareButton.setText(LocaleController.getString("ShareQrCode", R.string.ShareQrCode));
+            shareButton.setText(LocaleController.getString(R.string.ShareQrCode));
             shareButton.setTextColor(fragment.getThemedColor(Theme.key_featuredStickers_buttonText));
             shareButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-            shareButton.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            shareButton.setTypeface(AndroidUtilities.bold());
             rootLayout.addView(shareButton);
         }
 
         public void onCreate() {
-            ChatThemeController.preloadAllWallpaperThumbs(true);
-            ChatThemeController.preloadAllWallpaperThumbs(false);
-            ChatThemeController.preloadAllWallpaperImages(true);
-            ChatThemeController.preloadAllWallpaperImages(false);
+            ChatThemeController chatThemeController = ChatThemeController.getInstance(currentAccount);
+            chatThemeController.preloadAllWallpaperThumbs(true);
+            chatThemeController.preloadAllWallpaperThumbs(false);
+            chatThemeController.preloadAllWallpaperImages(true);
+            chatThemeController.preloadAllWallpaperImages(false);
             NotificationCenter.getGlobalInstance().addObserver(this, NotificationCenter.emojiLoaded);
         }
 

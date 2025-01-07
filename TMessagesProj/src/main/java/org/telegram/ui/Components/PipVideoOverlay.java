@@ -34,6 +34,7 @@ import android.webkit.WebView;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
+import androidx.annotation.NonNull;
 import androidx.core.math.MathUtils;
 import androidx.dynamicanimation.animation.DynamicAnimation;
 import androidx.dynamicanimation.animation.FloatPropertyCompat;
@@ -44,6 +45,7 @@ import com.google.android.exoplayer2.C;
 
 import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.ApplicationLoader;
+import org.telegram.messenger.MediaController;
 import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.LaunchActivity;
@@ -107,6 +109,7 @@ public class PipVideoOverlay {
     private boolean isVisible;
 
     private VideoForwardDrawable videoForwardDrawable = new VideoForwardDrawable(false);
+    private SeekSpeedDrawable seekSpeedDrawable;
     private int mVideoWidth, mVideoHeight;
     private EmbedBottomSheet parentSheet;
     private PhotoViewer photoViewer;
@@ -144,7 +147,7 @@ public class PipVideoOverlay {
 
     private boolean postedDismissControls;
     private Runnable dismissControlsCallback = () -> {
-        if (photoViewer != null && photoViewer.getVideoPlayerRewinder().rewindCount > 0) {
+        if (photoViewer != null && photoViewer.getVideoPlayerRewinder().rewinding) {
             AndroidUtilities.runOnUIThread(this.dismissControlsCallback, 1500);
             return;
         }
@@ -245,9 +248,9 @@ public class PipVideoOverlay {
         }
 
         if (photoViewerWebView != null) {
-            photoViewer.getVideoPlayerRewinder().startRewind(photoViewerWebView, forward, photoViewer.getCurrentVideoSpeed());
+            photoViewer.getVideoPlayerRewinder().startRewind(photoViewerWebView, forward, longClickStartPoint[0], photoViewer.getCurrentVideoSpeed(), seekSpeedDrawable);
         } else {
-            photoViewer.getVideoPlayerRewinder().startRewind(videoPlayer, forward, photoViewer.getCurrentVideoSpeed());
+            photoViewer.getVideoPlayerRewinder().startRewind(videoPlayer, forward, longClickStartPoint[0], photoViewer.getCurrentVideoSpeed(), seekSpeedDrawable);
         }
 
         if (!isShowingControls) {
@@ -315,11 +318,12 @@ public class PipVideoOverlay {
         controlsAnimator.start();
     }
 
-    public static void dimissAndDestroy() {
+    public static void dismissAndDestroy() {
         if (instance.parentSheet != null) {
             instance.parentSheet.destroy();
         } else if (instance.photoViewer != null) {
             instance.photoViewer.destroyPhotoViewer();
+            MediaController.getInstance().tryResumePausedAudio();
         }
         dismiss();
     }
@@ -329,10 +333,14 @@ public class PipVideoOverlay {
     }
 
     public static void dismiss(boolean animate) {
-        instance.dismissInternal(animate);
+        instance.dismissInternal(animate, false);
     }
 
-    private void dismissInternal(boolean animate) {
+    public static void dismiss(boolean animate, boolean immediate) {
+        instance.dismissInternal(animate, immediate);
+    }
+
+    private void dismissInternal(boolean animate, boolean immediate) {
         if (isDismissing) {
             return;
         }
@@ -354,7 +362,11 @@ public class PipVideoOverlay {
 
         // Animate is a flag for PhotoViewer transition, not ours
         if (animate || contentView == null) {
-            AndroidUtilities.runOnUIThread(this::onDismissedInternal, 100);
+            if (immediate) {
+                onDismissedInternal();
+            } else {
+                AndroidUtilities.runOnUIThread(this::onDismissedInternal, 100);
+            }
         } else {
             AnimatorSet set = new AnimatorSet();
             set.setDuration(250);
@@ -405,13 +417,9 @@ public class PipVideoOverlay {
     }
 
     private void cancelRewind() {
-        if (photoViewer == null) {
-            return;
-        }
-
-        if (photoViewer.getVideoPlayerRewinder().rewindCount > 0) {
-            photoViewer.getVideoPlayerRewinder().cancelRewind();
-        }
+        if (photoViewer == null) return;
+        if (photoViewer.getVideoPlayerRewinder() == null) return;
+        photoViewer.getVideoPlayerRewinder().cancelRewind();
     }
 
     public static void updatePlayButton() {
@@ -753,14 +761,14 @@ public class PipVideoOverlay {
 
             @Override
             public boolean onSingleTapUp(MotionEvent e) {
-                if (!hasDoubleTap()) {
+                if (!hasDoubleTap(e)) {
                     return onSingleTapConfirmed(e);
                 }
                 return super.onSingleTapUp(e);
             }
 
             @Override
-            public boolean hasDoubleTap() {
+            public boolean hasDoubleTap(MotionEvent e) {
                 if (photoViewer == null || photoViewer.getVideoPlayer() == null && photoViewerWebView == null || isDismissing || isVideoCompleted || isScrolling || scaleGestureDetector.isInProgress() || !canLongClick) {
                     return false;
                 }
@@ -866,6 +874,8 @@ public class PipVideoOverlay {
                     canLongClick = false;
                     cancelRewind();
                     AndroidUtilities.cancelRunOnUIThread(longClickCallback);
+                } else if (action == MotionEvent.ACTION_MOVE && photoViewer != null && photoViewer.getVideoPlayerRewinder() != null && photoViewer.getVideoPlayerRewinder().rewinding) {
+                    photoViewer.getVideoPlayerRewinder().setX(ev.getX());
                 }
 
                 if (consumingChild != null) {
@@ -894,7 +904,7 @@ public class PipVideoOverlay {
                     if (onSideToDismiss) {
                         onSideToDismiss = false;
 
-                        dimissAndDestroy();
+                        dismissAndDestroy();
                     } else {
                         if (!pipXSpring.isRunning()) {
                             pipXSpring.setStartValue(pipX)
@@ -918,6 +928,7 @@ public class PipVideoOverlay {
             protected void onConfigurationChanged(Configuration newConfig) {
                 AndroidUtilities.checkDisplaySize(getContext(), newConfig);
                 pipConfig = null;
+                AndroidUtilities.setPreferredMaxRefreshRate(windowManager, contentView, windowLayoutParams);
 
                 if (pipWidth != getSuggestedWidth() * scaleFactor || pipHeight != getSuggestedHeight() * scaleFactor) {
                     windowLayoutParams.width = pipWidth = (int) (getSuggestedWidth() * scaleFactor);
@@ -957,7 +968,7 @@ public class PipVideoOverlay {
                 path.addRoundRect(AndroidUtilities.rectTmp, AndroidUtilities.dp(ROUNDED_CORNERS_DP), AndroidUtilities.dp(ROUNDED_CORNERS_DP), Path.Direction.CW);
             }
         };
-        contentView = new ViewGroup(context) {
+        contentView = new PipVideoViewGroup(context) {
             @Override
             protected void onLayout(boolean changed, int l, int t, int r, int b) {
                 contentFrameLayout.layout(0, 0, pipWidth, pipHeight);
@@ -1011,8 +1022,24 @@ public class PipVideoOverlay {
                     videoForwardDrawable.setBounds(getLeft(), getTop(), getRight(), getBottom());
                     videoForwardDrawable.draw(canvas);
                 }
+                if (photoViewer != null && photoViewer.framesRewinder != null) {
+                    canvas.save();
+                    canvas.translate(getLeft(), getTop());
+                    photoViewer.framesRewinder.draw(canvas, getRight() - getLeft(), getBottom() - getTop());
+                    canvas.restore();
+                }
+            }
+
+            @Override
+            protected void dispatchDraw(@NonNull Canvas canvas) {
+                super.dispatchDraw(canvas);
+                if (seekSpeedDrawable != null && seekSpeedDrawable.isShown()) {
+                    seekSpeedDrawable.setBounds(getLeft(), getTop(), getRight(), getBottom());
+                    seekSpeedDrawable.draw(canvas);
+                }
             }
         };
+        seekSpeedDrawable = new SeekSpeedDrawable(controlsView::invalidate, true, false);
         controlsView.setWillNotDraw(false);
         controlsView.setAlpha(0f);
         View scrim = new View(context);
@@ -1028,7 +1055,7 @@ public class PipVideoOverlay {
         closeButton.setColorFilter(Theme.getColor(Theme.key_voipgroup_actionBarItems), PorterDuff.Mode.MULTIPLY);
         closeButton.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_listSelector)));
         closeButton.setPadding(padding, padding, padding, padding);
-        closeButton.setOnClickListener(v -> dimissAndDestroy());
+        closeButton.setOnClickListener(v -> dismissAndDestroy());
         controlsView.addView(closeButton, LayoutHelper.createFrame(buttonSize, buttonSize, Gravity.RIGHT, 0, margin, margin, 0));
 
         ImageView expandButton = new ImageView(context);
@@ -1117,6 +1144,7 @@ public class PipVideoOverlay {
         windowLayoutParams.dimAmount = 0f;
         windowLayoutParams.flags = FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS;
 
+        AndroidUtilities.setPreferredMaxRefreshRate(windowManager, contentView, windowLayoutParams);
         // Animate is a flag for PhotoViewer transition, not ours
         if (animate) {
             windowManager.addView(contentView, windowLayoutParams);
@@ -1228,6 +1256,17 @@ public class PipVideoOverlay {
 
         private float getPipY() {
             return mPrefs.getFloat("y", -1);
+        }
+    }
+
+    public static class PipVideoViewGroup extends ViewGroup {
+        public PipVideoViewGroup(Context context) {
+            super(context);
+        }
+
+        @Override
+        protected void onLayout(boolean changed, int l, int t, int r, int b) {
+
         }
     }
 }

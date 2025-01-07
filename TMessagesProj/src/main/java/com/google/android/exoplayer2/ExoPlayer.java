@@ -23,6 +23,7 @@ import android.content.Context;
 import android.media.AudioDeviceInfo;
 import android.media.AudioTrack;
 import android.media.MediaCodec;
+import android.opengl.EGLContext;
 import android.os.Looper;
 import android.os.Process;
 import android.view.Surface;
@@ -67,6 +68,9 @@ import com.google.android.exoplayer2.video.spherical.CameraMotionListener;
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
+
+import org.telegram.messenger.DispatchQueue;
+
 import java.util.List;
 
 /**
@@ -153,7 +157,9 @@ import java.util.List;
  */
 public interface ExoPlayer extends Player {
 
-  /**
+    void setWorkerQueue(DispatchQueue dispatchQueue);
+
+    /**
    * @deprecated Use {@link ExoPlayer}, as the {@link AudioComponent} methods are defined by that
    *     interface.
    */
@@ -447,6 +453,7 @@ public interface ExoPlayer extends Player {
   final class Builder {
 
     /* package */ final Context context;
+    public EGLContext eglContext;
 
     /* package */ Clock clock;
     /* package */ long foregroundModeTimeoutMs;

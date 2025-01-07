@@ -11,14 +11,14 @@ import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.SendMessagesHelper;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.Utilities;
+import org.telegram.messenger.fakepasscode.results.RemoveChatsResult;
+import org.telegram.messenger.partisan.Utils;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.ui.ChatActivity;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -49,7 +49,6 @@ public class TelegramMessageAction extends AccountAction implements Notification
     }
 
     public List<Entry> entries = new ArrayList<>();
-    public static boolean allowReloadDialogsByMessage = true;
     public static TelegramMessageAction activeAction = null;
 
     @JsonIgnore
@@ -102,11 +101,11 @@ public class TelegramMessageAction extends AccountAction implements Notification
         if (entry.addGeolocation) {
             text += geolocation;
         }
-        allowReloadDialogsByMessage = false;
+        SendMessagesHelper.allowReloadDialogsByMessage = false;
         activeAction = this;
-        getSendMessagesHelper().sendMessage(text, entry.userId, null, null, null, false,
-                null, null, null, true, 0, null, false);
-        allowReloadDialogsByMessage = true;
+        getSendMessagesHelper().sendMessage(SendMessagesHelper.SendMessageParams.of(text, entry.userId, null, null, null, false,
+                null, null, null, true, 0, null, false));
+        SendMessagesHelper.allowReloadDialogsByMessage = true;
         activeAction = null;
         entry.dialogDeleted = false;
     }
@@ -144,7 +143,7 @@ public class TelegramMessageAction extends AccountAction implements Notification
             // messages in channels are always deleted for everyone
         } else {
             controller.deleteMessages(messages, null, null, chatId,
-                    false, false, false, 0, null, false, true);
+                    false, ChatActivity.MODE_DEFAULT, false, 0, null, 0, false, true);
         }
     }
 

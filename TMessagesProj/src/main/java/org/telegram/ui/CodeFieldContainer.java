@@ -58,7 +58,7 @@ public class CodeFieldContainer extends LinearLayout {
                 }
                 float successProgress = codeField.getSuccessProgress();
                 int focusClr = ColorUtils.blendARGB(Theme.getColor(Theme.key_windowBackgroundWhiteInputField), Theme.getColor(Theme.key_windowBackgroundWhiteInputFieldActivated), codeField.getFocusedProgress());
-                int errorClr = ColorUtils.blendARGB(focusClr, Theme.getColor(Theme.key_dialogTextRed), codeField.getErrorProgress());
+                int errorClr = ColorUtils.blendARGB(focusClr, Theme.getColor(Theme.key_text_RedBold), codeField.getErrorProgress());
                 paint.setColor(ColorUtils.blendARGB(errorClr, Theme.getColor(Theme.key_checkbox), successProgress));
                 AndroidUtilities.rectTmp.set(child.getLeft(), child.getTop(), child.getRight(), child.getBottom());
                 AndroidUtilities.rectTmp.inset(strokeWidth, strokeWidth);
@@ -171,7 +171,7 @@ public class CodeFieldContainer extends LinearLayout {
                 codeField[a].setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
                 codeField[a].setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
                 codeField[a].setMaxLines(1);
-                codeField[a].setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+                codeField[a].setTypeface(AndroidUtilities.bold());
                 codeField[a].setPadding(0, 0, 0, 0);
                 codeField[a].setGravity(Gravity.CENTER);
                 if (currentType == 3) {

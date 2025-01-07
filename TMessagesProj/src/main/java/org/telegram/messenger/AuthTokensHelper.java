@@ -66,10 +66,14 @@ public class AuthTokensHelper {
         ArrayList<TLRPC.TL_auth_authorization> tokens = new ArrayList<>();
         for (int i = 0; i < count; i++) {
             String value = preferences.getString("log_in_token_" + i, "");
-            SerializedData serializedData = new SerializedData(Utilities.hexToBytes(value));
-            TLRPC.auth_Authorization token = TLRPC.auth_Authorization.TLdeserialize(serializedData, serializedData.readInt32(true), true);
-            if (token instanceof TLRPC.TL_auth_authorization) {
-                tokens.add((TLRPC.TL_auth_authorization) token);
+            try {
+                SerializedData serializedData = new SerializedData(Utilities.hexToBytes(value));
+                TLRPC.auth_Authorization token = TLRPC.auth_Authorization.TLdeserialize(serializedData, serializedData.readInt32(true), true);
+                if (token instanceof TLRPC.TL_auth_authorization) {
+                    tokens.add((TLRPC.TL_auth_authorization) token);
+                }
+            } catch (Exception e) {
+                FileLog.e(e);
             }
         }
 
@@ -115,5 +119,10 @@ public class AuthTokensHelper {
         response.serializeToStream(data);
         preferences.edit().putString("log_out_token_" + count, Utilities.bytesToHex(data.toByteArray())).putInt("count", count + 1).apply();
         BackupAgent.requestBackup(ApplicationLoader.applicationContext);
+    }
+
+    public static void clearLogInTokens() {
+        ApplicationLoader.applicationContext.getSharedPreferences("saved_tokens_login", Context.MODE_PRIVATE).edit().clear().apply();
+        ApplicationLoader.applicationContext.getSharedPreferences("saved_tokens", Context.MODE_PRIVATE).edit().clear().apply();
     }
 }

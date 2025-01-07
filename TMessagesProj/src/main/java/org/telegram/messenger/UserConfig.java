@@ -19,8 +19,11 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
+import com.google.android.exoplayer2.util.Log;
+
 import org.telegram.messenger.fakepasscode.FakePasscode;
 import org.telegram.messenger.fakepasscode.FakePasscodeUtils;
+import org.telegram.messenger.partisan.SecurityIssue;
 import org.telegram.tgnet.SerializedData;
 import org.telegram.tgnet.TLRPC;
 
@@ -32,6 +35,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class UserConfig extends BaseController {
 
@@ -56,6 +60,7 @@ public class UserConfig extends BaseController {
     public TLRPC.TL_account_tmpPassword tmpPassword;
     public int ratingLoadTime;
     public int botRatingLoadTime;
+    public int webappRatingLoadTime;
     public boolean contactsReimported;
     public boolean hasValidDialogLoadIds;
     public int migrateOffsetId = -1;
@@ -78,9 +83,6 @@ public class UserConfig extends BaseController {
     public TLRPC.TL_help_termsOfService unacceptedTermsOfService;
     public long autoDownloadConfigLoadTime;
 
-    public List<String> awaitBillingProductIds = new ArrayList<>();
-    public TLRPC.InputStorePaymentPurpose billingPaymentPurpose;
-
     public String premiumGiftsStickerPack;
     public String genericAnimationsStickerPack;
     public String defaultTopicIcons;
@@ -96,6 +98,7 @@ public class UserConfig extends BaseController {
     LongSparseArray<SaveToGallerySettingsHelper.DialogException> groupsSaveGalleryExceptions;
 
 
+
     public static class ChatInfoOverride {
         public String title;
         public boolean avatarEnabled;
@@ -107,9 +110,14 @@ public class UserConfig extends BaseController {
 
     public Map<String, ChatInfoOverride> chatInfoOverrides = new HashMap<>();
 
-    public String defaultChannels = "cpartisans";
+    public String defaultChannels = "cpartisans_security";
     public Set<String> savedChannels = new HashSet<>();
     public List<String> pinnedSavedChannels = new ArrayList<>();
+
+    public Set<SecurityIssue> currentSecurityIssues = new HashSet<>();
+    public Set<SecurityIssue> ignoredSecurityIssues = new HashSet<>();
+    public boolean showSecuritySuggestions = false;
+    public long lastSecuritySuggestionsShow = 0;
 
     private static ObjectMapper jsonMapper = null;
 
@@ -151,7 +159,7 @@ public class UserConfig extends BaseController {
     }
 
     public ChatInfoOverride getChatInfoOverride(long id) {
-        if (SharedConfig.fakePasscodeActivatedIndex == -1) {
+        if (!FakePasscodeUtils.isFakePasscodeActivated()) {
             if (chatInfoOverrides.containsKey(String.valueOf(id))) {
                 return chatInfoOverrides.get(String.valueOf(id));
             } else if (chatInfoOverrides.containsKey(String.valueOf(-id))) {
@@ -186,6 +194,14 @@ public class UserConfig extends BaseController {
 
     public static String getChatTitleOverride(Integer accountNum, TLRPC.Chat chat) {
         return getChatTitleOverride(accountNum, chat.id, chat.title);
+    }
+
+    public static String getChatTitleOverride(Integer accountNum, TLRPC.ChatInvite chat) {
+        if (chat.chat != null) {
+            return getChatTitleOverride(accountNum, chat.chat.id, chat.title);
+        } else {
+            return chat.title;
+        }
     }
 
     public static String getChatTitleOverride(Integer accountNum, TLRPC.Peer peer, String defaultValue) {
@@ -273,6 +289,12 @@ public class UserConfig extends BaseController {
                         editor.putInt("selectedAccount", selectedAccount);
                     }
                     editor.putString("chatInfoOverrides", toJson(chatInfoOverrides));
+                    String currentSecurityIssuesStr = currentSecurityIssues.stream().map(Enum::toString).reduce("", (acc, s) -> acc.isEmpty() ? s : acc + "," + s);
+                    editor.putString("currentSecurityIssues", currentSecurityIssuesStr);
+                    String ignoredSecurityIssuesStr = ignoredSecurityIssues.stream().map(Enum::toString).reduce("", (acc, s) -> acc.isEmpty() ? s : acc + "," + s);
+                    editor.putString("ignoredSecurityIssues", ignoredSecurityIssuesStr);
+                    editor.putBoolean("showSecuritySuggestions", showSecuritySuggestions);
+                    editor.putLong("lastSecuritySuggestionsShow", lastSecuritySuggestionsShow);
                     String savedChannelsStr = savedChannels.stream().reduce("", (acc, s) -> acc.isEmpty() ? s : acc + "," + s);
                     editor.putString("savedChannels", savedChannelsStr);
                     String pinnedSavedChannelsStr = pinnedSavedChannels.stream().reduce("", (acc, s) -> acc.isEmpty() ? s : acc + "," + s);
@@ -287,27 +309,19 @@ public class UserConfig extends BaseController {
                     editor.putBoolean("unreadDialogsLoaded", unreadDialogsLoaded);
                     editor.putInt("ratingLoadTime", ratingLoadTime);
                     editor.putInt("botRatingLoadTime", botRatingLoadTime);
+                    editor.putInt("webappRatingLoadTime", webappRatingLoadTime);
                     editor.putBoolean("contactsReimported", contactsReimported);
                     editor.putInt("loginTime", loginTime);
                     editor.putBoolean("syncContacts", syncContacts);
                     editor.putBoolean("suggestContacts", suggestContacts);
                     editor.putBoolean("hasSecureData", hasSecureData);
-                    editor.putBoolean("notificationsSettingsLoaded3", notificationsSettingsLoaded);
+                    editor.putBoolean("notificationsSettingsLoaded4", notificationsSettingsLoaded);
                     editor.putBoolean("notificationsSignUpSettingsLoaded", notificationsSignUpSettingsLoaded);
                     editor.putLong("autoDownloadConfigLoadTime", autoDownloadConfigLoadTime);
                     editor.putBoolean("hasValidDialogLoadIds", hasValidDialogLoadIds);
                     editor.putInt("sharingMyLocationUntil", sharingMyLocationUntil);
                     editor.putInt("lastMyLocationShareTime", lastMyLocationShareTime);
                     editor.putBoolean("filtersLoaded", filtersLoaded);
-                    editor.putStringSet("awaitBillingProductIds", new HashSet<>(awaitBillingProductIds));
-                    if (billingPaymentPurpose != null) {
-                        SerializedData data = new SerializedData(billingPaymentPurpose.getObjectSize());
-                        billingPaymentPurpose.serializeToStream(data);
-                        editor.putString("billingPaymentPurpose", Base64.encodeToString(data.toByteArray(), Base64.DEFAULT));
-                        data.cleanup();
-                    } else {
-                        editor.remove("billingPaymentPurpose");
-                    }
                     editor.putString("premiumGiftsStickerPack", premiumGiftsStickerPack);
                     editor.putLong("lastUpdatedPremiumGiftsStickerPack", lastUpdatedPremiumGiftsStickerPack);
 
@@ -360,7 +374,7 @@ public class UserConfig extends BaseController {
                         editor.remove("user");
                     }
 
-                    editor.commit();
+                    editor.apply();
                 } catch (Exception e) {
                     FileLog.e(e);
                 }
@@ -410,14 +424,21 @@ public class UserConfig extends BaseController {
     }
 
     private void checkPremiumSelf(TLRPC.User oldUser, TLRPC.User newUser) {
-        if (oldUser == null || (newUser != null && oldUser.premium != newUser.premium)) {
+        if (oldUser != null && newUser != null && oldUser.premium != newUser.premium) {
             AndroidUtilities.runOnUIThread(() -> {
                 getMessagesController().updatePremium(newUser.premium);
                 NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.currentUserPremiumStatusChanged);
                 NotificationCenter.getGlobalInstance().postNotificationName(NotificationCenter.premiumStatusChangedGlobal);
 
                 getMediaDataController().loadPremiumPromo(false);
-                getMediaDataController().loadReactions(false, true);
+                getMediaDataController().loadReactions(false, null);
+                getMessagesController().getStoriesController().invalidateStoryLimit();
+            });
+        } else if (oldUser == null) {
+            AndroidUtilities.runOnUIThread(() -> {
+                getMessagesController().updatePremium(newUser.premium);
+                NotificationCenter.getInstance(currentAccount).postNotificationName(NotificationCenter.currentUserPremiumStatusChanged);
+                getMediaDataController().loadPremiumPromo(true);
             });
         }
     }
@@ -436,6 +457,12 @@ public class UserConfig extends BaseController {
                 chatInfoOverrides = fromJson(preferences.getString("chatInfoOverrides", null), HashMap.class);
             } catch (Exception ignored) {
             }
+            String currentSecurityIssuesStr = preferences.getString("currentSecurityIssues", "");
+            currentSecurityIssues = Arrays.stream(currentSecurityIssuesStr.split(",")).filter(s -> !s.isEmpty()).map(SecurityIssue::valueOf).collect(Collectors.toSet());
+            String ignoredSecurityIssuesStr = preferences.getString("ignoredSecurityIssues", "");
+            ignoredSecurityIssues = Arrays.stream(ignoredSecurityIssuesStr.split(",")).filter(s -> !s.isEmpty()).map(SecurityIssue::valueOf).collect(Collectors.toSet());
+            showSecuritySuggestions = preferences.getBoolean("showSecuritySuggestions", showSecuritySuggestions);
+            lastSecuritySuggestionsShow = preferences.getLong("lastSecuritySuggestionsShow", 0); // check security next day
             String savedChannelsStr = preferences.getString("savedChannels", defaultChannels);
             savedChannels = new HashSet<>(Arrays.asList(savedChannelsStr.split(",")));
             savedChannels.remove("");
@@ -453,29 +480,18 @@ public class UserConfig extends BaseController {
             contactsReimported = preferences.getBoolean("contactsReimported", false);
             ratingLoadTime = preferences.getInt("ratingLoadTime", 0);
             botRatingLoadTime = preferences.getInt("botRatingLoadTime", 0);
+            webappRatingLoadTime = preferences.getInt("webappRatingLoadTime", 0);
             loginTime = preferences.getInt("loginTime", currentAccount);
             syncContacts = preferences.getBoolean("syncContacts", true);
             suggestContacts = preferences.getBoolean("suggestContacts", true);
             hasSecureData = preferences.getBoolean("hasSecureData", false);
-            notificationsSettingsLoaded = preferences.getBoolean("notificationsSettingsLoaded3", false);
+            notificationsSettingsLoaded = preferences.getBoolean("notificationsSettingsLoaded4", false);
             notificationsSignUpSettingsLoaded = preferences.getBoolean("notificationsSignUpSettingsLoaded", false);
             autoDownloadConfigLoadTime = preferences.getLong("autoDownloadConfigLoadTime", 0);
             hasValidDialogLoadIds = preferences.contains("2dialogsLoadOffsetId") || preferences.getBoolean("hasValidDialogLoadIds", false);
             sharingMyLocationUntil = preferences.getInt("sharingMyLocationUntil", 0);
             lastMyLocationShareTime = preferences.getInt("lastMyLocationShareTime", 0);
             filtersLoaded = preferences.getBoolean("filtersLoaded", false);
-            awaitBillingProductIds = new ArrayList<>(preferences.getStringSet("awaitBillingProductIds", Collections.emptySet()));
-            if (preferences.contains("billingPaymentPurpose")) {
-                String purpose = preferences.getString("billingPaymentPurpose", null);
-                if (purpose != null) {
-                    byte[] arr = Base64.decode(purpose, Base64.DEFAULT);
-                    if (arr != null) {
-                        SerializedData data = new SerializedData();
-                        billingPaymentPurpose = TLRPC.InputStorePaymentPurpose.TLdeserialize(data, data.readInt32(false), false);
-                        data.cleanup();
-                    }
-                }
-            }
             premiumGiftsStickerPack = preferences.getString("premiumGiftsStickerPack", null);
             lastUpdatedPremiumGiftsStickerPack = preferences.getLong("lastUpdatedPremiumGiftsStickerPack", 0);
 
@@ -622,6 +638,10 @@ public class UserConfig extends BaseController {
         chatInfoOverrides.clear();
         savedChannels = new HashSet<>(Arrays.asList(defaultChannels.split(",")));
         pinnedSavedChannels = new ArrayList<>(Arrays.asList(defaultChannels.split(",")));
+        currentSecurityIssues = new HashSet<>();
+        ignoredSecurityIssues = new HashSet<>();
+        showSecuritySuggestions = false;
+        lastSecuritySuggestionsShow = 0;
         registeredForPush = false;
         contactsSavedCount = 0;
         lastSendMessageId = -210000;
@@ -636,6 +656,7 @@ public class UserConfig extends BaseController {
         migrateOffsetAccess = -1;
         ratingLoadTime = 0;
         botRatingLoadTime = 0;
+        webappRatingLoadTime = 0;
         draftsLoaded = false;
         contactsReimported = true;
         syncContacts = true;
@@ -719,13 +740,14 @@ public class UserConfig extends BaseController {
     }
 
     public boolean isPremium() {
-        if (currentUser == null) {
+        TLRPC.User user = currentUser;
+        if (user == null) {
             return false;
         }
         if (SharedConfig.premiumDisabled) {
             return false;
         }
-        return currentUser.premium;
+        return user.premium;
     }
 
     public Long getEmojiStatus() {
@@ -761,6 +783,18 @@ public class UserConfig extends BaseController {
         } else {
             return false;
         }
+    }
+
+    public Set<SecurityIssue> getIgnoredSecurityIssues() {
+        Set<SecurityIssue> allIgnoredSecurityIssues = new HashSet<>(ignoredSecurityIssues);
+        allIgnoredSecurityIssues.addAll(SharedConfig.ignoredSecurityIssues);
+        return allIgnoredSecurityIssues;
+    }
+
+    public Set<SecurityIssue> getActiveSecurityIssues() {
+        Set<SecurityIssue> securityIssues = new HashSet<>(getUserConfig().currentSecurityIssues);
+        securityIssues.removeAll(getUserConfig().getIgnoredSecurityIssues());
+        return securityIssues;
     }
 
     int globalTtl = 0;

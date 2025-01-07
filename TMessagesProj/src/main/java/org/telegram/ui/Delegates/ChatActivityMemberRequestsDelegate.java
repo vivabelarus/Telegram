@@ -24,14 +24,17 @@ import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
 import org.telegram.ui.Components.AvatarsImageView;
+import org.telegram.ui.Components.BlurredFrameLayout;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.MemberRequestsBottomSheet;
+import org.telegram.ui.Components.SizeNotifierFrameLayout;
 
 import java.util.List;
 
 public class ChatActivityMemberRequestsDelegate {
 
     private final BaseFragment fragment;
+    private final SizeNotifierFrameLayout sizeNotifierFrameLayout;
     private final Callback callback;
     private final TLRPC.Chat currentChat;
     private final int currentAccount;
@@ -51,8 +54,9 @@ public class ChatActivityMemberRequestsDelegate {
     private int pendingRequestsCount;
     private int closePendingRequestsCount = -1;
 
-    public ChatActivityMemberRequestsDelegate(BaseFragment fragment, TLRPC.Chat currentChat, Callback callback) {
+    public ChatActivityMemberRequestsDelegate(BaseFragment fragment, SizeNotifierFrameLayout sizeNotifierFrameLayout, TLRPC.Chat currentChat, Callback callback) {
         this.fragment = fragment;
+        this.sizeNotifierFrameLayout = sizeNotifierFrameLayout;
         this.currentChat = currentChat;
         this.currentAccount = fragment.getCurrentAccount();
         this.callback = callback;
@@ -60,9 +64,8 @@ public class ChatActivityMemberRequestsDelegate {
 
     public View getView() {
         if (root == null) {
-            root = new FrameLayout(fragment.getParentActivity());
-            root.setBackgroundResource(R.drawable.blockpanel);
-            root.getBackground().mutate().setColorFilter(new PorterDuffColorFilter(fragment.getThemedColor(Theme.key_chat_topPanelBackground), PorterDuff.Mode.MULTIPLY));
+            root = new BlurredFrameLayout(fragment.getParentActivity(), sizeNotifierFrameLayout);
+            root.setBackgroundColor(fragment.getThemedColor(Theme.key_chat_topPanelBackground));
             root.setVisibility(View.GONE);
             pendingRequestsEnterOffset = -getViewHeight();
 
@@ -84,6 +87,7 @@ public class ChatActivityMemberRequestsDelegate {
                     super.onMeasure(MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(width), MeasureSpec.EXACTLY), heightMeasureSpec);
                 }
             };
+            avatarsView.setAvatarsTextSize(AndroidUtilities.dp(18));
             avatarsView.reset();
             requestsDataLayout.addView(avatarsView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 8, 0, 10, 0));
 
@@ -93,7 +97,7 @@ public class ChatActivityMemberRequestsDelegate {
             requestsCountTextView.setSingleLine();
             requestsCountTextView.setText(null);
             requestsCountTextView.setTextColor(fragment.getThemedColor(Theme.key_chat_topPanelTitle));
-            requestsCountTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+            requestsCountTextView.setTypeface(AndroidUtilities.bold());
             requestsDataLayout.addView(requestsCountTextView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP, 0, 0, 0, 0));
 
             closeView = new ImageView(fragment.getParentActivity());
@@ -101,7 +105,7 @@ public class ChatActivityMemberRequestsDelegate {
                 closeView.setBackground(Theme.createSelectorDrawable(fragment.getThemedColor(Theme.key_inappPlayerClose) & 0x19ffffff, 1, AndroidUtilities.dp(14)));
             }
             closeView.setColorFilter(new PorterDuffColorFilter(fragment.getThemedColor(Theme.key_chat_topPanelClose), PorterDuff.Mode.MULTIPLY));
-            closeView.setContentDescription(LocaleController.getString("Close", R.string.Close));
+            closeView.setContentDescription(LocaleController.getString(R.string.Close));
             closeView.setImageResource(R.drawable.miniplayer_close);
             closeView.setScaleType(ImageView.ScaleType.CENTER);
             closeView.setOnClickListener((v) -> {
@@ -242,7 +246,6 @@ public class ChatActivityMemberRequestsDelegate {
     }
 
     public void fillThemeDescriptions(List<ThemeDescription> themeDescriptions) {
-        themeDescriptions.add(new ThemeDescription(root, ThemeDescription.FLAG_BACKGROUNDFILTER, null, null, null, null, Theme.key_chat_topPanelBackground));
         themeDescriptions.add(new ThemeDescription(requestsCountTextView, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_chat_topPanelTitle));
         themeDescriptions.add(new ThemeDescription(closeView, ThemeDescription.FLAG_IMAGECOLOR, null, null, null, null, Theme.key_chat_topPanelClose));
     }

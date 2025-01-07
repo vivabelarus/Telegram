@@ -26,6 +26,9 @@ import android.graphics.drawable.Drawable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -54,10 +57,13 @@ import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.BackupImageView;
 import org.telegram.ui.Components.CheckBox2;
+import org.telegram.ui.Components.ColoredImageSpan;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.spoilers.SpoilerEffect;
+import org.telegram.ui.Components.spoilers.SpoilerEffect2;
 import org.telegram.ui.PhotoViewer;
+import org.telegram.ui.Stars.StarsIntroActivity;
 
 public class PhotoAttachPhotoCell extends FrameLayout {
 
@@ -86,7 +92,11 @@ public class PhotoAttachPhotoCell extends FrameLayout {
     private final Theme.ResourcesProvider resourcesProvider;
 
     private SpoilerEffect spoilerEffect = new SpoilerEffect();
+    private SpoilerEffect2 spoilerEffect2;
     private boolean hasSpoiler;
+
+    private long stars;
+    private boolean starsSelectedMultiple;
 
     private Path path = new Path();
     private float spoilerRevealX;
@@ -108,7 +118,33 @@ public class PhotoAttachPhotoCell extends FrameLayout {
 
         setWillNotDraw(false);
 
-        container = new FrameLayout(context);
+        container = new FrameLayout(context) {
+            @Override
+            protected boolean drawChild(Canvas canvas, View child, long drawingTime) {
+                if (spoilerEffect2 != null && child == imageView) {
+                    boolean r = super.drawChild(canvas, child, drawingTime);
+                    if (hasSpoiler && spoilerRevealProgress != 1f && (photoEntry == null || !photoEntry.isAttachSpoilerRevealed)) {
+                        if (spoilerRevealProgress != 0f) {
+                            canvas.save();
+                            path.rewind();
+                            path.addCircle(spoilerRevealX, spoilerRevealY, spoilerMaxRadius * spoilerRevealProgress, Path.Direction.CW);
+                            canvas.clipPath(path, Region.Op.DIFFERENCE);
+                        }
+//                        float alphaProgress = CubicBezierInterpolator.DEFAULT.getInterpolation(1f - imageViewCrossfadeProgress);
+//                        float alpha = hasSpoiler ? alphaProgress : 1f - alphaProgress;
+                        spoilerEffect2.draw(canvas, container, imageView.getMeasuredWidth(), imageView.getMeasuredHeight());
+                        if (photoEntry != null && photoEntry.starsAmount > 0) {
+                            imageView.drawBlurredText(canvas, 1f);
+                        }
+                        if (spoilerRevealProgress != 0f) {
+                            canvas.restore();
+                        }
+                    }
+                    return r;
+                }
+                return super.drawChild(canvas, child, drawingTime);
+            }
+        };
         addView(container, LayoutHelper.createFrame(80, 80));
 
         int sColor = Color.WHITE;
@@ -141,8 +177,10 @@ public class PhotoAttachPhotoCell extends FrameLayout {
                     }
 
                     blurImageReceiver.draw(canvas);
-                    spoilerEffect.setBounds(0, 0, getWidth(), getHeight());
-                    spoilerEffect.draw(canvas);
+                    if (spoilerEffect2 == null) {
+                        spoilerEffect.setBounds(0, 0, getWidth(), getHeight());
+                        spoilerEffect.draw(canvas);
+                    }
                     invalidate();
 
                     if (spoilerRevealProgress != 0f) {
@@ -158,12 +196,21 @@ public class PhotoAttachPhotoCell extends FrameLayout {
                     imageViewCrossfadeProgress = Math.min(1f, imageViewCrossfadeProgress + dt / duration);
                     lastUpdate = System.currentTimeMillis();
                     invalidate();
+                    if (spoilerEffect2 != null) {
+                        container.invalidate();
+                    }
                 } else if (imageViewCrossfadeProgress == 1f && imageViewCrossfadeSnapshot != null) {
                     imageViewCrossfadeSnapshot.recycle();
                     imageViewCrossfadeSnapshot = null;
                     crossfadeDuration = null;
                     invalidate();
                 }
+            }
+
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+                updateSpoilers2(photoEntry != null && photoEntry.hasSpoiler);
             }
         };
         imageView.setBlurAllowed(true);
@@ -189,7 +236,7 @@ public class PhotoAttachPhotoCell extends FrameLayout {
 
         videoTextView = new TextView(context);
         videoTextView.setTextColor(0xffffffff);
-        videoTextView.setTypeface(AndroidUtilities.getTypeface(AndroidUtilities.TYPEFACE_ROBOTO_MEDIUM));
+        videoTextView.setTypeface(AndroidUtilities.bold());
         videoTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 12);
         videoTextView.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         videoInfoContainer.addView(videoTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.CENTER_VERTICAL, 13, -0.7f, 0, 0));
@@ -258,6 +305,79 @@ public class PhotoAttachPhotoCell extends FrameLayout {
             this.crossfadeDuration = crossfadeDuration;
             imageView.setHasBlur(hasSpoiler);
             imageView.invalidate();
+            if (hasSpoiler) {
+                updateSpoilers2(hasSpoiler);
+            }
+        }
+    }
+
+    private SpannableString star, lock;
+    public void setStarsPrice(long stars, boolean multiple) {
+        if (multiple != starsSelectedMultiple || stars != this.stars) {
+            this.stars = stars;
+            this.starsSelectedMultiple = multiple;
+
+            SpannableStringBuilder s = null;
+            if (stars > 0) {
+                s = new SpannableStringBuilder();
+                if (star == null) {
+                    star = new SpannableString("⭐");
+                    ColoredImageSpan span = new ColoredImageSpan(R.drawable.star_small_inner);
+                    span.setScale(.7f, .7f);
+                    star.setSpan(span, 0, star.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+                s.append(star);
+                s.append(" ");
+                if (multiple) {
+                    if (lock == null) {
+                        lock = new SpannableString("l");
+                        ColoredImageSpan span = new ColoredImageSpan(R.drawable.msg_mini_lock2);
+                        lock.setSpan(span, 0, lock.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    }
+                    s.append(lock);
+                } else {
+                    s.append(Long.toString(stars));
+                }
+            }
+            imageView.setBlurredText(s);
+            imageView.invalidate();
+            container.invalidate();
+        }
+    }
+
+    private void updateSpoilers2(boolean hasSpoiler) {
+        if (container == null || imageView == null || imageView.getMeasuredHeight() <= 0 || imageView.getMeasuredWidth() <= 0) {
+            return;
+        }
+        if (hasSpoiler && SpoilerEffect2.supports()) {
+            if (spoilerEffect2 == null) {
+                spoilerEffect2 = SpoilerEffect2.getInstance(container);
+            }
+        } else {
+            if (spoilerEffect2 != null) {
+                spoilerEffect2.detach(this);
+                spoilerEffect2 = null;
+            }
+        }
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (spoilerEffect2 != null) {
+            spoilerEffect2.detach(this);
+        }
+    }
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        if (spoilerEffect2 != null) {
+            if (spoilerEffect2.destroyed) {
+                spoilerEffect2 = SpoilerEffect2.getInstance(this);
+            } else {
+                spoilerEffect2.attach(this);
+            }
         }
     }
 
@@ -321,7 +441,7 @@ public class PhotoAttachPhotoCell extends FrameLayout {
         return videoInfoContainer;
     }
 
-    public void setPhotoEntry(MediaController.PhotoEntry entry, boolean needCheckShow, boolean last) {
+    public void setPhotoEntry(MediaController.PhotoEntry entry, boolean selectedMultiple, boolean needCheckShow, boolean last) {
         pressed = false;
         photoEntry = entry;
         isLast = last;
@@ -338,7 +458,7 @@ public class PhotoAttachPhotoCell extends FrameLayout {
             if (photoEntry.isVideo) {
                 imageView.setImage("vthumb://" + photoEntry.imageId + ":" + photoEntry.path, null, Theme.chat_attachEmptyDrawable);
             } else {
-                imageView.setOrientation(photoEntry.orientation, true);
+                imageView.setOrientation(photoEntry.orientation, photoEntry.invert, true);
                 imageView.setImage("thumb://" + photoEntry.imageId + ":" + photoEntry.path, null, Theme.chat_attachEmptyDrawable);
             }
         } else {
@@ -350,6 +470,7 @@ public class PhotoAttachPhotoCell extends FrameLayout {
         videoInfoContainer.setAlpha(showing ? 0.0f : 1.0f);
         requestLayout();
         setHasSpoiler(entry.hasSpoiler);
+        setStarsPrice(entry.starsAmount, selectedMultiple);
     }
 
     public void setPhotoEntry(MediaController.SearchImage searchImage, boolean needCheckShow, boolean last) {
@@ -389,6 +510,7 @@ public class PhotoAttachPhotoCell extends FrameLayout {
         videoInfoContainer.setAlpha(showing ? 0.0f : 1.0f);
         requestLayout();
         setHasSpoiler(false);
+        setStarsPrice(0, false);
     }
 
     public boolean isChecked() {
@@ -438,8 +560,8 @@ public class PhotoAttachPhotoCell extends FrameLayout {
         checkBox.setNum(num);
     }
 
-    public void setOnCheckClickLisnener(OnClickListener onCheckClickLisnener) {
-        checkFrame.setOnClickListener(onCheckClickLisnener);
+    public void setOnCheckClickListener(OnClickListener onCheckClickListener) {
+        checkFrame.setOnClickListener(onCheckClickListener);
     }
 
     public void setDelegate(PhotoAttachPhotoCellDelegate delegate) {
@@ -541,20 +663,20 @@ public class PhotoAttachPhotoCell extends FrameLayout {
         info.setEnabled(true);
         StringBuilder sb = new StringBuilder();
         if (photoEntry != null && photoEntry.isVideo) {
-            sb.append(LocaleController.getString("AttachVideo", R.string.AttachVideo) + ", " + LocaleController.formatDuration(photoEntry.duration));
+            sb.append(LocaleController.getString(R.string.AttachVideo) + ", " + LocaleController.formatDuration(photoEntry.duration));
         } else {
-            sb.append(LocaleController.getString("AttachPhoto", R.string.AttachPhoto));
+            sb.append(LocaleController.getString(R.string.AttachPhoto));
         }
         if (photoEntry != null) {
             sb.append(". ");
-            sb.append(LocaleController.getInstance().formatterStats.format(photoEntry.dateTaken * 1000L));
+            sb.append(LocaleController.getInstance().getFormatterStats().format(photoEntry.dateTaken * 1000L));
         }
         info.setText(sb);
         if (checkBox.isChecked()) {
             info.setSelected(true);
         }
         if (Build.VERSION.SDK_INT >= 21) {
-            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(R.id.acc_action_open_photo, LocaleController.getString("Open", R.string.Open)));
+            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(R.id.acc_action_open_photo, LocaleController.getString(R.string.Open)));
         }
     }
 
@@ -568,8 +690,7 @@ public class PhotoAttachPhotoCell extends FrameLayout {
         return super.performAccessibilityAction(action, arguments);
     }
 
-    protected int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+    protected int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 }

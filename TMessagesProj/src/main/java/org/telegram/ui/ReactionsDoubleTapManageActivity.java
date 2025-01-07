@@ -66,7 +66,7 @@ public class ReactionsDoubleTapManageActivity extends BaseFragment implements No
 
     @Override
     public View createView(Context context) {
-        actionBar.setTitle(LocaleController.getString("Reactions", R.string.Reactions));
+        actionBar.setTitle(LocaleController.getString(R.string.Reactions));
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
 
@@ -106,8 +106,8 @@ public class ReactionsDoubleTapManageActivity extends BaseFragment implements No
                         break;
                     case 2:
                         TextInfoPrivacyCell cell = new TextInfoPrivacyCell(context);
-                        cell.setText(LocaleController.getString("DoubleTapPreviewRational", R.string.DoubleTapPreviewRational));
-                        cell.setBackground(Theme.getThemedDrawable(context, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
+                        cell.setText(LocaleController.getString(R.string.DoubleTapPreviewRational));
+                        cell.setBackground(Theme.getThemedDrawableByKey(context, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
                         view = cell;
                         break;
                     case 3:
@@ -125,7 +125,7 @@ public class ReactionsDoubleTapManageActivity extends BaseFragment implements No
                                 );
                             }
                         };
-                        view.setBackground(Theme.getThemedDrawable(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+                        view.setBackground(Theme.getThemedDrawableByKey(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
                         break;
                     default:
                     case 1: {
@@ -204,7 +204,7 @@ public class ReactionsDoubleTapManageActivity extends BaseFragment implements No
             textView = new TextView(context);
             textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             textView.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
-            textView.setText(LocaleController.getString("DoubleTapSetting", R.string.DoubleTapSetting));
+            textView.setText(LocaleController.getString(R.string.DoubleTapSetting));
             addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL, 20, 0, 48, 0));
 
             imageDrawable = new AnimatedEmojiDrawable.SwapAnimatedEmojiDrawable(this, AndroidUtilities.dp(24));
@@ -372,7 +372,7 @@ public class ReactionsDoubleTapManageActivity extends BaseFragment implements No
                 Theme.key_listSelector,
                 Theme.key_windowBackgroundGray,
                 Theme.key_windowBackgroundWhiteGrayText4,
-                Theme.key_windowBackgroundWhiteRedText4,
+                Theme.key_text_RedRegular,
                 Theme.key_windowBackgroundChecked,
                 Theme.key_windowBackgroundCheckText,
                 Theme.key_switchTrackBlue,

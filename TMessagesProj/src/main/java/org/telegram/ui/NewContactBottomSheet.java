@@ -63,6 +63,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 public class NewContactBottomSheet extends BottomSheet implements AdapterView.OnItemSelectedListener {
@@ -80,7 +81,6 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
     private boolean ignoreOnTextChange;
     private boolean ignoreOnPhoneChange;
     private boolean ignoreOnPhoneChangePaste;
-    private int countryState;
     private boolean ignoreSelection;
     private boolean donePressed;
     private String initialPhoneNumber;
@@ -88,13 +88,11 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
     private String initialFirstName;
     private String initialLastName;
 
-    private final static int done_button = 1;
     BaseFragment parentFragment;
     int classGuid;
     private AnimatedPhoneNumberEditText codeField;
     private View codeDividerView;
     private AnimatedPhoneNumberEditText phoneField;
-    private CountrySelectActivity.Country currentCountry;
     private String countryCodeForHint;
     private int wasCountryHintIndex;
     private TextView countryFlag;
@@ -105,12 +103,13 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
 
     public NewContactBottomSheet(BaseFragment parentFragment, Context context) {
         super(context, true);
+        fixNavigationBar();
         waitingKeyboard = true;
         smoothKeyboardAnimationEnabled = true;
         classGuid = ConnectionsManager.generateClassGuid();
         this.parentFragment = parentFragment;
         setCustomView(createView(getContext()));
-        setTitle(LocaleController.getString("NewContactTitle", R.string.NewContactTitle), true);
+        setTitle(LocaleController.getString(R.string.NewContactTitle), true);
     }
 
     public View createView(Context context) {
@@ -132,9 +131,9 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
         firstNameField = new OutlineEditText(context);
         firstNameField.getEditText().setInputType(InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT);
         firstNameField.getEditText().setImeOptions(EditorInfo.IME_ACTION_NEXT);
-        firstNameField.setHint(LocaleController.getString("FirstName", R.string.FirstName));
+        firstNameField.setHint(LocaleController.getString(R.string.FirstName));
         if (initialFirstName != null) {
-            firstNameField.setText(initialFirstName);
+            firstNameField.getEditText().setText(initialFirstName);
             initialFirstName = null;
         }
         frameLayout.addView(firstNameField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 58, Gravity.LEFT | Gravity.TOP, 0, 0, 0, 0));
@@ -151,9 +150,9 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
         lastNameField.setBackground(null);
         lastNameField.getEditText().setInputType(InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_AUTO_CORRECT);
         lastNameField.getEditText().setImeOptions(EditorInfo.IME_ACTION_NEXT);
-        lastNameField.setHint(LocaleController.getString("LastName", R.string.LastName));
+        lastNameField.setHint(LocaleController.getString(R.string.LastName));
         if (initialLastName != null) {
-            lastNameField.setText(initialLastName);
+            lastNameField.getEditText().setText(initialLastName);
             initialLastName = null;
         }
         frameLayout.addView(lastNameField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 58, Gravity.LEFT | Gravity.TOP, 0, 68, 0, 0));
@@ -260,7 +259,6 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
                 if (text.length() == 0) {
                     setCountryButtonText(null);
                     phoneField.setHintText(null);
-                    countryState = LoginActivity.COUNTRY_STATE_EMPTY;
                 } else {
                     CountrySelectActivity.Country country;
                     boolean ok = false;
@@ -339,18 +337,15 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
 
                     if (country != null) {
                         ignoreSelection = true;
-                        currentCountry = country;
                         setCountryHint(text, country);
-                        countryState = LoginActivity.COUNTRY_STATE_NOT_SET_OR_VALID;
                     } else {
                         setCountryButtonText(null);
                         phoneField.setHintText(null);
-                        countryState = LoginActivity.COUNTRY_STATE_INVALID;
                     }
                     if (!ok) {
                         codeField.setSelection(codeField.getText().length());
                     }
-                    if (textToSet != null) {
+                    if (textToSet != null && textToSet.length() != 0) {
                         phoneField.requestFocus();
                         phoneField.setText(textToSet);
                         phoneField.setSelection(phoneField.length());
@@ -594,13 +589,11 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
                     }
                     if (country1 != null) {
                         codeField.setText(country1.code);
-                        countryState = 0;
                     }
                 }
             }
             if (codeField.length() == 0) {
                 phoneField.setHintText(null);
-                countryState = 1;
             }
         }
 
@@ -611,10 +604,10 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
         doneButton.setGravity(Gravity.CENTER);
         doneButton.setLines(1);
         doneButton.setSingleLine(true);
-        doneButton.setText(LocaleController.getString("CreateContact", R.string.CreateContact));
+        doneButton.setText(LocaleController.getString(R.string.CreateContact));
         doneButton.setTextColor(parentFragment.getThemedColor(Theme.key_featuredStickers_buttonText));
         doneButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        doneButton.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        doneButton.setTypeface(AndroidUtilities.bold());
 
         progressView = new RadialProgressView(context);
         progressView.setSize(AndroidUtilities.dp(20));
@@ -676,7 +669,7 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
                 if (res != null) {
                     if (!res.users.isEmpty()) {
                         MessagesController.getInstance(currentAccount).putUsers(res.users, false);
-                        MessagesController.openChatOrProfileWith(res.users.get(0), null, parentFragment, 1, true);
+                        MessagesController.getInstance(currentAccount).openChatOrProfileWith(res.users.get(0), null, parentFragment, 1, false);
                         dismiss();
                     } else {
                         if (parentFragment.getParentActivity() == null) {
@@ -698,6 +691,7 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
     public void show() {
         super.show();
         firstNameField.getEditText().requestFocus();
+        firstNameField.getEditText().setSelection(firstNameField.getEditText().length());
         AndroidUtilities.runOnUIThread(() -> {
             AndroidUtilities.showKeyboard(firstNameField.getEditText());
         }, 50);
@@ -738,9 +732,9 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
         }
     }
 
-    public void setInitialPhoneNumber(String value, boolean withCoutryCode) {
+    public NewContactBottomSheet setInitialPhoneNumber(String value, boolean withCountryCode) {
         initialPhoneNumber = value;
-        initialPhoneNumberWithCountryCode = withCoutryCode;
+        initialPhoneNumberWithCountryCode = withCountryCode;
 
         if (!TextUtils.isEmpty(initialPhoneNumber)) {
             TLRPC.User user = UserConfig.getInstance(currentAccount).getCurrentUser();
@@ -749,24 +743,49 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
             } else if (initialPhoneNumberWithCountryCode || user == null || TextUtils.isEmpty(user.phone)) {
                 codeField.setText(initialPhoneNumber);
             } else {
+                boolean foundCountry = false;
                 String phone = user.phone;
                 for (int a = 4; a >= 1; a--) {
                     String sub = phone.substring(0, a);
                     List<CountrySelectActivity.Country> country = codesMap.get(sub);
                     if (country != null && country.size() > 0) {
-                        codeField.setText(country.get(0).code);
+                        final String regionCode = country.get(0).code;
+                        codeField.setText(regionCode);
+                        if (regionCode.endsWith("0") && initialPhoneNumber.startsWith("0")) {
+                            initialPhoneNumber = initialPhoneNumber.substring(1);
+                        }
+                        foundCountry = true;
                         break;
+                    }
+                }
+                if (!foundCountry && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    final Context ctx = ApplicationLoader.applicationContext;
+                    final String regionCode = (ctx != null) ? ctx.getSystemService(TelephonyManager.class).
+                            getSimCountryIso().toUpperCase(Locale.US) : Locale.getDefault().getCountry();
+                    codeField.setText(regionCode);
+                    if (regionCode.endsWith("0") && initialPhoneNumber.startsWith("0")) {
+                        initialPhoneNumber = initialPhoneNumber.substring(1);
                     }
                 }
                 phoneField.setText(initialPhoneNumber);
             }
             initialPhoneNumber = null;
         }
+
+        return this;
     }
 
     public void setInitialName(String firstName, String lastName) {
-        initialFirstName = firstName;
-        initialLastName = lastName;
+        if (firstNameField != null) {
+            firstNameField.getEditText().setText(firstName);
+        } else {
+            initialFirstName = firstName;
+        }
+        if (lastNameField != null) {
+            lastNameField.getEditText().setText(lastName);
+        } else {
+            initialLastName = lastName;
+        }
     }
 
     private void setCountryHint(String code, CountrySelectActivity.Country country) {
@@ -856,8 +875,6 @@ public class NewContactBottomSheet extends BottomSheet implements AdapterView.On
         String code = country.code;
         codeField.setText(code);
         setCountryHint(code, country);
-        currentCountry = country;
-        countryState = LoginActivity.COUNTRY_STATE_NOT_SET_OR_VALID;
         ignoreOnTextChange = false;
     }
 

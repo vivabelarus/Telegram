@@ -19,6 +19,9 @@ public class FakePasscodeDialogBuilder {
     public static AlertDialog buildAndGetViews(Context context, DialogTemplate template, List<View> viewsOutput) {
         AlertDialog.Builder dialogBuilder = new AlertDialog.Builder(context);
         dialogBuilder.setTitle(template.title);
+        if (template.message != null) {
+            dialogBuilder.setMessage(template.message);
+        }
 
         for (ViewTemplate viewTemplate: template.viewTemplates) {
             viewsOutput.add(viewTemplate.create(context));
@@ -29,6 +32,9 @@ public class FakePasscodeDialogBuilder {
         if (template.type == DialogType.ADD) {
             dialogBuilder.setPositiveButton(LocaleController.getString("Add", R.string.Add), null);
             dialogBuilder.setNeutralButton(LocaleController.getString("Cancel", R.string.Cancel), null);
+        } if (template.type == DialogType.CREATE) {
+            dialogBuilder.setPositiveButton(LocaleController.getString(R.string.Create), null);
+            dialogBuilder.setNeutralButton(LocaleController.getString("Cancel", R.string.Cancel), null);
         } else if (template.type == DialogType.DELETE) {
             dialogBuilder.setPositiveButton(LocaleController.getString("Delete", R.string.Delete), null);
             dialogBuilder.setNeutralButton(LocaleController.getString("Cancel", R.string.Cancel), null);
@@ -36,6 +42,11 @@ public class FakePasscodeDialogBuilder {
             dialogBuilder.setPositiveButton(LocaleController.getString("Save", R.string.Save), null);
             dialogBuilder.setNeutralButton(LocaleController.getString("Cancel", R.string.Cancel), null);
             dialogBuilder.setNegativeButton(LocaleController.getString("Delete", R.string.Delete), template.negativeListener);
+        } else if (template.type == DialogType.ONLY_SAVE) {
+            dialogBuilder.setPositiveButton(LocaleController.getString("Save", R.string.Save), null);
+            dialogBuilder.setNeutralButton(LocaleController.getString("Cancel", R.string.Cancel), null);
+        } else if (template.type == DialogType.OK) {
+            dialogBuilder.setPositiveButton(LocaleController.getString("OK", R.string.OK), null);
         }
         AlertDialog dialog = dialogBuilder.create();
         addPositiveButtonListener(dialog, template, viewsOutput);

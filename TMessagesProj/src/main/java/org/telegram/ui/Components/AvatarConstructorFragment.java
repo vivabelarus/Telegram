@@ -10,6 +10,7 @@ import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PorterDuff;
@@ -128,7 +129,7 @@ public class AvatarConstructorFragment extends BaseFragment {
         actionBar.setItemsBackgroundColor(Theme.getColor(Theme.key_listSelector), false);
         actionBar.setBackButtonDrawable(new BackDrawable(false));
         actionBar.setAllowOverlayTitle(false);
-        actionBar.setTitle(LocaleController.getString("PhotoEditor", R.string.PhotoEditor));
+        actionBar.setTitle(LocaleController.getString(R.string.PhotoEditor));
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
             public void onItemClick(int id) {
@@ -153,8 +154,8 @@ public class AvatarConstructorFragment extends BaseFragment {
         ActionBarMenu menuOverlay = overlayActionBar.createMenu();
         menuOverlay.setClipChildren(false);
         setPhotoItem = menuOverlay.addItem(1, avatarFor != null && avatarFor.type == TYPE_SUGGEST_PHOTO_FOR_USER ?
-                LocaleController.getString("SuggestPhoto", R.string.SuggestPhoto) :
-                LocaleController.getString("SetPhoto", R.string.SetPhoto)
+                LocaleController.getString(R.string.SuggestPhoto) :
+                LocaleController.getString(R.string.SetPhoto)
         );
         setPhotoItem.setBackground(Theme.createSelectorDrawable(selectorColor, Theme.RIPPLE_MASK_CIRCLE_TO_BOUND_EDGE));
         overlayActionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
@@ -295,7 +296,7 @@ public class AvatarConstructorFragment extends BaseFragment {
 
             @Override
             public boolean onInterceptTouchEvent(MotionEvent ev) {
-                if (keyboardVisibleProgress == 0 && AndroidUtilities.findClickableView(this, ev.getX(), ev.getY())) {
+                if (keyboardVisibleProgress == 0) {
                     return false;
                 }
                 return onTouchEvent(ev);
@@ -364,7 +365,7 @@ public class AvatarConstructorFragment extends BaseFragment {
         });
 
         chooseBackgroundHint = new TextView(getContext());
-        chooseBackgroundHint.setText(LocaleController.getString("ChooseBackground", R.string.ChooseBackground));
+        chooseBackgroundHint.setText(LocaleController.getString(R.string.ChooseBackground));
         chooseBackgroundHint.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
         chooseBackgroundHint.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         chooseBackgroundHint.setGravity(Gravity.CENTER);
@@ -394,13 +395,13 @@ public class AvatarConstructorFragment extends BaseFragment {
         linearLayout.addView(backgroundContainer, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 48, 0, 12, 0, 12, 0));
 
         chooseEmojiHint = new TextView(getContext());
-        chooseEmojiHint.setText(LocaleController.getString("ChooseEmojiOrSticker", R.string.ChooseEmojiOrSticker));
+        chooseEmojiHint.setText(LocaleController.getString(R.string.ChooseEmojiOrSticker));
         chooseEmojiHint.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
         chooseEmojiHint.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         chooseEmojiHint.setGravity(Gravity.CENTER);
         linearLayout.addView(chooseEmojiHint, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 21, 18, 21, 10));
 
-        selectAnimatedEmojiDialog = new SelectAnimatedEmojiDialog(this, getContext(), false, null, SelectAnimatedEmojiDialog.TYPE_AVATAR_CONSTRUCTOR, null) {
+        selectAnimatedEmojiDialog = new SelectAnimatedEmojiDialog(this, getContext(), false, null, SelectAnimatedEmojiDialog.TYPE_AVATAR_CONSTRUCTOR, true, null, 16, Theme.isCurrentThemeDark() ? Color.WHITE : getThemedColor(Theme.key_windowBackgroundWhiteBlueIcon)) {
 
             private boolean firstLayout = true;
 
@@ -432,21 +433,21 @@ public class AvatarConstructorFragment extends BaseFragment {
 
 
         button = new FrameLayout(getContext());
-        button.setBackground(Theme.AdaptiveRipple.filledRect(Theme.key_featuredStickers_addButton, 8));
+        button.setBackground(Theme.AdaptiveRipple.filledRectByKey(Theme.key_featuredStickers_addButton, 8));
 
         TextView textView = new TextView(getContext());
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
         if (imageUpdater.setForType == FOR_TYPE_CHANNEL) {
-            textView.setText(LocaleController.getString("SetChannelPhoto", R.string.SetChannelPhoto));
+            textView.setText(LocaleController.getString(R.string.SetChannelPhoto));
         } else if (imageUpdater.setForType == FOR_TYPE_GROUP) {
-            textView.setText(LocaleController.getString("SetGroupPhoto", R.string.SetGroupPhoto));
+            textView.setText(LocaleController.getString(R.string.SetGroupPhoto));
         } else if (avatarFor != null && avatarFor.type == TYPE_SUGGEST_PHOTO_FOR_USER) {
-            textView.setText(LocaleController.getString("SuggestPhoto", R.string.SuggestPhoto));
+            textView.setText(LocaleController.getString(R.string.SuggestPhoto));
         } else {
-            textView.setText(LocaleController.getString("SetProfilePhotoAvatarConstructor", R.string.SetProfilePhotoAvatarConstructor));
+            textView.setText(LocaleController.getString(R.string.SetProfilePhotoAvatarConstructor));
         }
         textView.setGravity(Gravity.CENTER);
-        textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textView.setTypeface(AndroidUtilities.bold());
         textView.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
         button.addView(textView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
         button.setOnClickListener(v -> onDonePressed());
@@ -491,10 +492,10 @@ public class AvatarConstructorFragment extends BaseFragment {
         }
         if (wasChanged) {
             AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity());
-            builder.setMessage(LocaleController.getString("PhotoEditorDiscardAlert", R.string.PhotoEditorDiscardAlert));
-            builder.setTitle(LocaleController.getString("DiscardChanges", R.string.DiscardChanges));
-            builder.setPositiveButton(LocaleController.getString("PassportDiscard", R.string.PassportDiscard), (dialogInterface, i) -> finishFragment());
-            builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
+            builder.setMessage(LocaleController.getString(R.string.PhotoEditorDiscardAlert));
+            builder.setTitle(LocaleController.getString(R.string.DiscardChanges));
+            builder.setPositiveButton(LocaleController.getString(R.string.PassportDiscard), (dialogInterface, i) -> finishFragment());
+            builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
             AlertDialog dialog = builder.create();
             showDialog(dialog);
             dialog.redPositive();
@@ -685,6 +686,7 @@ public class AvatarConstructorFragment extends BaseFragment {
         float changeBackgroundProgress = 1f;
         BackgroundGradient backgroundGradient;
 
+        private ColorFilter colorFilter = new PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN);
         AnimatedFloat expandProgress = new AnimatedFloat(this, 200, CubicBezierInterpolator.EASE_OUT);
         boolean expanded;
         float overrideExpandProgress = -1f;
@@ -791,8 +793,8 @@ public class AvatarConstructorFragment extends BaseFragment {
                     backupImageView.animatedEmojiDrawable.getImageReceiver().setRoundRadius((int) (imageSize * 2 * STICKER_DEFAULT_ROUND_RADIUS));
                 }
                 backupImageView.animatedEmojiDrawable.setBounds((int) (cx - imageSize), (int) (cy - imageSize), (int) (cx + imageSize), (int) (cy + imageSize));
+                backupImageView.animatedEmojiDrawable.setColorFilter(colorFilter);
                 backupImageView.animatedEmojiDrawable.draw(canvas);
-
             } else {
                 backupImageView.imageReceiver.setImageCoords(cx - imageSize, cy - imageSize, imageSize * 2, imageSize * 2);
                 backupImageView.imageReceiver.setRoundRadius((int) (imageSize * 2 * STICKER_DEFAULT_ROUND_RADIUS));
@@ -842,6 +844,7 @@ public class AvatarConstructorFragment extends BaseFragment {
             ImageReceiver imageReceiver = backupImageView.getImageReceiver();
             if (backupImageView.animatedEmojiDrawable != null) {
                 imageReceiver = backupImageView.animatedEmojiDrawable.getImageReceiver();
+                backupImageView.animatedEmojiDrawable.setColorFilter(colorFilter);
             }
             return imageReceiver;
         }
@@ -882,6 +885,7 @@ public class AvatarConstructorFragment extends BaseFragment {
                 backgroundGradient.color4 = defaultColors[i][3];
                 gradients.add(backgroundGradient);
             }
+            useLayoutPositionOnClick = true;
             setOnItemClickListener((view, position) -> {
                 if (view instanceof GradientSelectorView && !((GradientSelectorView) view).isCustom) {
                     selectedItemId = ((GradientSelectorView) view).backgroundGradient.stableId;
@@ -1106,13 +1110,13 @@ public class AvatarConstructorFragment extends BaseFragment {
         colorPickerContainer.addView(colorPicker);
 
         FrameLayout button = new FrameLayout(getContext());
-        button.setBackground(Theme.AdaptiveRipple.filledRect(Theme.key_featuredStickers_addButton, 8));
+        button.setBackground(Theme.AdaptiveRipple.filledRectByKey(Theme.key_featuredStickers_addButton, 8));
 
         TextView textView = new TextView(getContext());
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        textView.setText(LocaleController.getString("SetColor", R.string.SetColor));
+        textView.setText(LocaleController.getString(R.string.SetColor));
         textView.setGravity(Gravity.CENTER);
-        textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textView.setTypeface(AndroidUtilities.bold());
         textView.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
         button.addView(textView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
 

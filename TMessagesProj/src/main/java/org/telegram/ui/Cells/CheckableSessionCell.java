@@ -208,7 +208,7 @@ public class CheckableSessionCell extends FrameLayout {
             nameTextView.setText(session.domain);
             String name;
             if (user != null) {
-                avatarDrawable.setInfo(user, currentAccount);
+                avatarDrawable.setInfo(currentAccount, user);
                 name = UserObject.getFirstName(user);
                 imageView.setForUserOrChat(user, avatarDrawable);
             } else {
@@ -288,7 +288,7 @@ public class CheckableSessionCell extends FrameLayout {
         }
         String deviceModel = session.device_model.toLowerCase();
         int iconId;
-        String colorKey;
+        int colorKey;
         if (deviceModel.contains("safari")) {
             iconId = R.drawable.device_web_safari;
             colorKey = Theme.key_avatar_backgroundPink;

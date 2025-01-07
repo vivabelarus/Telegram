@@ -10,6 +10,7 @@ package org.telegram.ui.ActionBar;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -507,6 +508,13 @@ public class ActionBarMenu extends LinearLayout {
         return null;
     }
 
+    public void setItemVisibility(int id, int visibility) {
+        View item = getItem(id);
+        if (item != null) {
+            item.setVisibility(visibility);
+        }
+    }
+
     @Override
     public void setEnabled(boolean enabled) {
         super.setEnabled(enabled);
@@ -517,11 +525,14 @@ public class ActionBarMenu extends LinearLayout {
         }
     }
 
-    public int getItemsMeasuredWidth() {
+    public int getItemsMeasuredWidth(boolean ignoreAlpha) {
         int w = 0;
         int count = getChildCount();
         for (int a = 0; a < count; a++) {
             View view = getChildAt(a);
+            if (!ignoreAlpha && (view.getAlpha() == 0 || view.getVisibility() != View.VISIBLE)) {
+                continue;
+            }
             if (view instanceof ActionBarMenuItem) {
                 w += view.getMeasuredWidth();
             }
@@ -562,6 +573,29 @@ public class ActionBarMenu extends LinearLayout {
     }
 
     public void clearSearchFilters() {
+        int count = getChildCount();
+        for (int a = 0; a < count; a++) {
+            View view = getChildAt(a);
+            if (view instanceof ActionBarMenuItem) {
+                ActionBarMenuItem item = (ActionBarMenuItem) view;
+                if (item.isSearchField()) {
+                    item.clearSearchFilters();
+                    break;
+                }
+            }
+        }
+    }
 
+    private Runnable onLayoutListener;
+    public void setOnLayoutListener(Runnable listener) {
+        this.onLayoutListener = listener;
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
+        if (onLayoutListener != null) {
+            onLayoutListener.run();
+        }
     }
 }

@@ -40,6 +40,7 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.Utilities;
 import org.telegram.tgnet.TLObject;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.tgnet.tl.TL_stories;
 import org.telegram.ui.ActionBar.ActionBarMenuItem;
 import org.telegram.ui.ActionBar.ActionBarPopupWindow;
 import org.telegram.ui.ActionBar.BackDrawable;
@@ -59,6 +60,7 @@ import org.telegram.ui.Components.NestedSizeNotifierLayout;
 import org.telegram.ui.Components.RecyclerListView;
 import org.telegram.ui.Components.ViewPagerFixed;
 import org.telegram.ui.Storage.CacheModel;
+import org.telegram.ui.Stories.StoriesListPlaceProvider;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -70,7 +72,8 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
     private static final int PAGE_TYPE_MEDIA = 1;
     private static final int PAGE_TYPE_DOCUMENTS = 2;
     private static final int PAGE_TYPE_MUSIC = 3;
-    private static final int PAGE_TYPE_VOICE = 4;
+    private static final int PAGE_TYPE_STORIES = 4;
+    private static final int PAGE_TYPE_VOICE = 5;
 
     private static final int VIEW_TYPE_CHAT = 1;
     private static final int VIEW_TYPE_FILE_ENTRY = 2;
@@ -99,11 +102,12 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
         this.parentFragment = parentFragment;
 
         int CacheTabChats;
-        allPages[PAGE_TYPE_CHATS] = new Page(LocaleController.getString("FilterChats", R.string.FilterChats), PAGE_TYPE_CHATS, new DialogsAdapter());
-        allPages[PAGE_TYPE_MEDIA] = new Page(LocaleController.getString("MediaTab", R.string.MediaTab), PAGE_TYPE_MEDIA, new MediaAdapter());
-        allPages[PAGE_TYPE_DOCUMENTS] = new Page(LocaleController.getString("SharedFilesTab2", R.string.SharedFilesTab2), PAGE_TYPE_DOCUMENTS, new DocumentsAdapter());
-        allPages[PAGE_TYPE_MUSIC] = new Page(LocaleController.getString("Music", R.string.Music), PAGE_TYPE_MUSIC, new MusicAdapter());
-        //   allPages[PAGE_TYPE_VOICE] = new Page(LocaleController.getString("Voice", R.string.Voice), PAGE_TYPE_VOICE, new VoiceAdapter());
+        allPages[PAGE_TYPE_CHATS] = new Page(LocaleController.getString(R.string.FilterChats), PAGE_TYPE_CHATS, new DialogsAdapter());
+        //allPages[PAGE_TYPE_STORIES] = new Page(LocaleController.getString(R.string.FilterStories), PAGE_TYPE_STORIES, new MediaAdapter(true));
+        allPages[PAGE_TYPE_MEDIA] = new Page(LocaleController.getString(R.string.MediaTab), PAGE_TYPE_MEDIA, new MediaAdapter(false));
+        allPages[PAGE_TYPE_DOCUMENTS] = new Page(LocaleController.getString(R.string.SharedFilesTab2), PAGE_TYPE_DOCUMENTS, new DocumentsAdapter());
+        allPages[PAGE_TYPE_MUSIC] = new Page(LocaleController.getString(R.string.Music), PAGE_TYPE_MUSIC, new MusicAdapter());
+        //   allPages[PAGE_TYPE_VOICE] = new Page(LocaleController.getString(R.string.Voice), PAGE_TYPE_VOICE, new VoiceAdapter());
 
         for (int i = 0; i < allPages.length; i++) {
             if (allPages[i] == null) {
@@ -155,7 +159,17 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
                         ItemInner itemInner = adapter.itemInners.get(position);
                         //if (cacheModel.getSelectedFiles() == 0) {
                         if (view instanceof SharedPhotoVideoCell2) {
-                            openPhoto(itemInner, (MediaAdapter) adapter, recyclerListView, (SharedPhotoVideoCell2)view);
+                            boolean isStory = ((MediaAdapter) adapter).isStories;
+                            if (isStory) {
+                                TL_stories.StoryItem storyItem = new TL_stories.TL_storyItem();
+                                storyItem.dialogId = itemInner.file.dialogId;
+                                storyItem.id = Objects.hash(itemInner.file.file.getAbsolutePath());
+                                storyItem.attachPath = itemInner.file.file.getAbsolutePath();
+                                storyItem.date = -1;
+                                parentFragment.getOrCreateStoryViewer().open(context, storyItem, StoriesListPlaceProvider.of(recyclerListView));
+                            } else {
+                                openPhoto(itemInner, (MediaAdapter) adapter, recyclerListView, (SharedPhotoVideoCell2) view);
+                            }
                             return;
                         }
 
@@ -171,21 +185,21 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
                     if (view instanceof CacheCell || view instanceof SharedPhotoVideoCell2) {
                         ActionBarPopupWindow.ActionBarPopupWindowLayout popupWindowLayout = new ActionBarPopupWindow.ActionBarPopupWindowLayout(getContext());
                         if (view instanceof SharedPhotoVideoCell2) {
-                            ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_view_file, LocaleController.getString("CacheOpenFile", R.string.CacheOpenFile), false, null).setOnClickListener(v -> {
+                            ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_view_file, LocaleController.getString(R.string.CacheOpenFile), false, null).setOnClickListener(v -> {
                                 openPhoto(itemInner, (MediaAdapter) adapter, recyclerListView, (SharedPhotoVideoCell2) view);
                                 if (popupWindow != null) {
                                     popupWindow.dismiss();
                                 }
                             });
                         } else if (((CacheCell) view).container.getChildAt(0) instanceof SharedAudioCell) {
-                            ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_played, LocaleController.getString("PlayFile", R.string.PlayFile), false, null).setOnClickListener(v -> {
+                            ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_played, LocaleController.getString(R.string.PlayFile), false, null).setOnClickListener(v -> {
                                 openItem(itemInner.file, (CacheCell) view);
                                 if (popupWindow != null) {
                                     popupWindow.dismiss();
                                 }
                             });
                         } else {
-                            ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_view_file, LocaleController.getString("CacheOpenFile", R.string.CacheOpenFile), false, null).setOnClickListener(v -> {
+                            ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_view_file, LocaleController.getString(R.string.CacheOpenFile), false, null).setOnClickListener(v -> {
                                 openItem(itemInner.file, (CacheCell) view);
                                 if (popupWindow != null) {
                                     popupWindow.dismiss();
@@ -193,7 +207,7 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
                             });
                         }
                         if (itemInner.file.dialogId != 0 && itemInner.file.messageId != 0) {
-                            ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_viewintopic, LocaleController.getString("ViewInChat", R.string.ViewInChat), false, null).setOnClickListener(v -> {
+                            ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_viewintopic, LocaleController.getString(R.string.ViewInChat), false, null).setOnClickListener(v -> {
                                 Bundle args = new Bundle();
                                 if (itemInner.file.dialogId > 0) {
                                     args.putLong("user_id", itemInner.file.dialogId);
@@ -209,7 +223,7 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
                             });
                         }
                         ActionBarMenuItem.addItem(popupWindowLayout, R.drawable.msg_select,
-                                !cacheModel.selectedFiles.contains(itemInner.file) ? LocaleController.getString("Select", R.string.Select) : LocaleController.getString("Deselect", R.string.Deselect),
+                                !cacheModel.selectedFiles.contains(itemInner.file) ? LocaleController.getString(R.string.Select) : LocaleController.getString(R.string.Deselect),
                                 false, null).setOnClickListener(v -> {
                             if (delegate != null) {
                                 delegate.onItemSelected(itemInner.entities, itemInner.file, true);
@@ -235,7 +249,7 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
             public void bindView(View view, int position, int viewType) {
                 RecyclerListView recyclerListView = (RecyclerListView) view;
                 recyclerListView.setAdapter(pages.get(position).adapter);
-                if (pages.get(position).type == PAGE_TYPE_MEDIA) {
+                if (pages.get(position).type == PAGE_TYPE_MEDIA || pages.get(position).type == PAGE_TYPE_STORIES) {
                     recyclerListView.setLayoutManager(new GridLayoutManager(view.getContext(), 3));
                 } else {
                     recyclerListView.setLayoutManager(new LinearLayoutManager(view.getContext()));
@@ -262,7 +276,7 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
         closeButton.setImageDrawable(backDrawable = new BackDrawable(true));
         backDrawable.setColor(Theme.getColor(Theme.key_actionBarActionModeDefaultIcon));
         closeButton.setBackground(Theme.createSelectorDrawable(Theme.getColor(Theme.key_actionBarActionModeDefaultSelector), 1));
-        closeButton.setContentDescription(LocaleController.getString("Close", R.string.Close));
+        closeButton.setContentDescription(LocaleController.getString(R.string.Close));
         actionModeLayout.addView(closeButton, new LinearLayout.LayoutParams(AndroidUtilities.dp(54), ViewGroup.LayoutParams.MATCH_PARENT));
         actionModeViews.add(closeButton);
         closeButton.setOnClickListener(v -> {
@@ -271,14 +285,14 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
 
         selectedMessagesCountTextView = new AnimatedTextView(context, true, true, true);
         selectedMessagesCountTextView.setTextSize(AndroidUtilities.dp(18));
-        selectedMessagesCountTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        selectedMessagesCountTextView.setTypeface(AndroidUtilities.bold());
         selectedMessagesCountTextView.setTextColor(Theme.getColor(Theme.key_actionBarActionModeDefaultIcon));
         actionModeLayout.addView(selectedMessagesCountTextView, LayoutHelper.createLinear(0, LayoutHelper.MATCH_PARENT, 1.0f, 18, 0, 0, 0));
         actionModeViews.add(selectedMessagesCountTextView);
 
         clearItem = new ActionBarMenuItem(context, null, Theme.getColor(Theme.key_actionBarActionModeDefaultSelector), Theme.getColor(Theme.key_actionBarActionModeDefaultIcon), false);
         clearItem.setIcon(R.drawable.msg_clear);
-        clearItem.setContentDescription(LocaleController.getString("Delete", R.string.Delete));
+        clearItem.setContentDescription(LocaleController.getString(R.string.Delete));
         clearItem.setDuplicateParentStateEnabled(false);
         actionModeLayout.addView(clearItem, new LinearLayout.LayoutParams(AndroidUtilities.dp(54), ViewGroup.LayoutParams.MATCH_PARENT));
         actionModeViews.add(clearItem);
@@ -316,10 +330,9 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
             if (fileIsMedia(fileInfo.file)) {
                 ArrayList<Object> photoEntries = new ArrayList<>();
                 photoEntries.add(new MediaController.PhotoEntry(0, 0, 0, fileInfo.file.getPath(), 0, fileInfo.type == TYPE_VIDEOS, 0, 0, 0));
-                ;
                 PhotoViewer.getInstance().openPhotoForSelect(photoEntries, 0, PhotoViewer.SELECT_TYPE_NO_SELECT, false, placeProvider, null);
             } else {
-                AndroidUtilities.openForView(fileInfo.file, fileInfo.file.getName(), null, parentFragment.getParentActivity(), null);
+                AndroidUtilities.openForView(fileInfo.file, fileInfo.file.getName(), null, parentFragment.getParentActivity(), null, false);
             }
         }
         if (cacheCell.type == TYPE_MUSIC) {
@@ -377,6 +390,8 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
                 } else if (allPages[i].type == PAGE_TYPE_MUSIC && !cacheModel.music.isEmpty()) {
                     pages.add(allPages[i]);
                 } else if (allPages[i].type == PAGE_TYPE_VOICE && !cacheModel.voice.isEmpty()) {
+                    pages.add(allPages[i]);
+                } else if (allPages[i].type == PAGE_TYPE_STORIES && !cacheModel.stories.isEmpty()) {
                     pages.add(allPages[i]);
                 }
             }
@@ -544,7 +559,7 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
                     String title;
                     boolean animated = userCell.dialogFileEntities != null && userCell.dialogFileEntities.dialogId == dialogFileEntities.dialogId;
                     if (dialogFileEntities.dialogId == UNKNOWN_CHATS_DIALOG_ID) {
-                        title = LocaleController.getString("CacheOtherChats", R.string.CacheOtherChats);
+                        title = LocaleController.getString(R.string.CacheOtherChats);
                         userCell.getImageView().getAvatarDrawable().setAvatarType(AvatarDrawable.AVATAR_TYPE_OTHER_CHATS);
                         userCell.getImageView().setForUserOrChat(null, userCell.getImageView().getAvatarDrawable());
                     } else {
@@ -588,6 +603,8 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
                     files = cacheModel.music;
                 } else if (type == PAGE_TYPE_VOICE) {
                     files = cacheModel.voice;
+                } else if (type == PAGE_TYPE_STORIES) {
+                    files = cacheModel.stories;
                 }
                 if (files != null) {
                     for (int i = 0; i < files.size(); i++) {
@@ -641,8 +658,10 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
 
         private SharedPhotoVideoCell2.SharedResources sharedResources;
 
-        private MediaAdapter() {
-            super(PAGE_TYPE_MEDIA);
+        boolean isStories;
+        private MediaAdapter(boolean stories) {
+            super(stories ? PAGE_TYPE_STORIES : PAGE_TYPE_MEDIA);
+            this.isStories = stories;
         }
 
         ArrayList<Object> photoEntries = new ArrayList<>();
@@ -674,6 +693,7 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
         }
 
         CombinedDrawable thumb;
+        private int storiesPointer;
 
         @Override
         public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
@@ -686,7 +706,17 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
             boolean animated = file == cell.getTag();
             cell.setTag(file);
             int size = (int) Math.max(100, AndroidUtilities.getRealScreenSize().x / AndroidUtilities.density);
-            if (file.type == TYPE_VIDEOS) {
+            if (isStories) {
+                boolean isVideo = file.file.getAbsolutePath().endsWith(".mp4");
+                if (isVideo) {
+                    cell.imageReceiver.setImage(ImageLocation.getForPath(file.file.getAbsolutePath()), size + "_" + size + "_pframe", thumb, null, null, 0);
+                } else {
+                    cell.imageReceiver.setImage(ImageLocation.getForPath(file.file.getAbsolutePath()), size + "_" + size, thumb, null, null, 0);
+                }
+                cell.storyId = Objects.hash(file.file.getAbsolutePath());
+                cell.isStory = true;
+                cell.setVideoText(AndroidUtilities.formatFileSize(file.size), true);
+            } else if (file.type == TYPE_VIDEOS) {
                 cell.imageReceiver.setImage(ImageLocation.getForPath("vthumb://" + 0 + ":" + file.file.getAbsolutePath()), size + "_" + size, thumb, null, null, 0);
                 cell.setVideoText(AndroidUtilities.formatFileSize(file.size), true);
             } else {
@@ -750,7 +780,7 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
             holder.itemView.setTag(file);
             long date = file.file.lastModified();
 
-            cell.setTextAndValueAndTypeAndThumb(file.messageType == MessageObject.TYPE_ROUND_VIDEO ? LocaleController.getString("AttachRound", R.string.AttachRound) : file.file.getName(), LocaleController.formatDateAudio(date / 1000, true), Utilities.getExtension(file.file.getName()), null, 0, divider);
+            cell.setTextAndValueAndTypeAndThumb(file.messageType == MessageObject.TYPE_ROUND_VIDEO ? LocaleController.getString(R.string.AttachRound) : file.file.getName(), LocaleController.formatDateAudio(date / 1000, true), Utilities.getExtension(file.file.getName()), null, 0, divider);
             if (!animated) {
                 cell.setPhoto(file.file.getPath());
             }
@@ -837,6 +867,7 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
             message.media.flags |= 3;
             message.media.document = new TLRPC.TL_document();
             message.flags |= TLRPC.MESSAGE_FLAG_HAS_MEDIA | TLRPC.MESSAGE_FLAG_HAS_FROM_ID;
+            message.dialog_id = fileInfo.dialogId;
 
             String ext = FileLoader.getFileExtension(fileInfo.file);
 
@@ -997,29 +1028,39 @@ public class CachedMediaLayout extends FrameLayout implements NestedSizeNotifier
             checkBox = new CheckBox2(context, 21);
             checkBox.setDrawBackgroundAsArc(14);
             checkBox.setColor(Theme.key_checkbox, Theme.key_radioBackground, Theme.key_checkboxCheck);
-            addView(checkBox, LayoutHelper.createFrame(24, 24, Gravity.LEFT | Gravity.CENTER_VERTICAL, 18, 0, 0, 0));
             View checkBoxClickableView = new View(getContext());
             checkBoxClickableView.setOnClickListener(v -> {
                 onCheckBoxPressed();
             });
-            addView(checkBoxClickableView, LayoutHelper.createFrame(40, 40, Gravity.LEFT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));
             container = new FrameLayout(context);
 
-            addView(container, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 48, 0, 90, 0));
             sizeTextView = new TextView(context);
             sizeTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 16);
             sizeTextView.setGravity(Gravity.RIGHT);
             sizeTextView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText));
 
-            addView(sizeTextView, LayoutHelper.createFrame(69, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 21, 0));
-
+            if (LocaleController.isRTL) {
+                addView(checkBox, LayoutHelper.createFrame(24, 24, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 18, 0));
+                addView(checkBoxClickableView, LayoutHelper.createFrame(40, 40, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));
+                addView(container, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 90, 0, 40, 0));
+                addView(sizeTextView, LayoutHelper.createFrame(69, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));
+            } else {
+                addView(checkBox, LayoutHelper.createFrame(24, 24, Gravity.LEFT | Gravity.CENTER_VERTICAL, 18, 0, 0, 0));
+                addView(checkBoxClickableView, LayoutHelper.createFrame(40, 40, Gravity.LEFT | Gravity.CENTER_VERTICAL, 0, 0, 0, 0));
+                addView(container, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, 0, 48, 0, 90, 0));
+                addView(sizeTextView, LayoutHelper.createFrame(69, LayoutHelper.WRAP_CONTENT, Gravity.RIGHT | Gravity.CENTER_VERTICAL, 0, 0, 21, 0));
+            }
         }
 
         @Override
         protected void dispatchDraw(Canvas canvas) {
             super.dispatchDraw(canvas);
             if (drawDivider) {
-                canvas.drawLine(getMeasuredWidth() - AndroidUtilities.dp(90), getMeasuredHeight() - 1, getMeasuredWidth(), getMeasuredHeight() - 1, Theme.dividerPaint);
+                if (LocaleController.isRTL) {
+                    canvas.drawLine(0, getMeasuredHeight() - 1, getMeasuredWidth() - AndroidUtilities.dp(48), getMeasuredHeight() - 1, Theme.dividerPaint);
+                } else {
+                    canvas.drawLine(getMeasuredWidth() - AndroidUtilities.dp(90), getMeasuredHeight() - 1, getMeasuredWidth(), getMeasuredHeight() - 1, Theme.dividerPaint);
+                }
             }
         }
 

@@ -29,6 +29,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Vibrator;
 import android.text.InputFilter;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -268,6 +269,62 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
         return false;
     }
 
+    private void setDefaultGroupName() {
+        TLRPC.User currentUser = getUserConfig().getCurrentUser();
+        int members = selectedContacts.size() + 1;
+        if (members >= 2 && members <= 5 && TextUtils.isEmpty(editText.getText())) {
+            String txt = "";
+            try {
+                switch (members) {
+                    case 2:
+                        txt = LocaleController.formatString(
+                                "GroupCreateMembersTwo", R.string.GroupCreateMembersTwo,
+                                currentUser.first_name,
+                                getFirstNameByPos(0)
+                        );
+                        break;
+                    case 3:
+                        txt = LocaleController.formatString(
+                                "GroupCreateMembersThree", R.string.GroupCreateMembersThree,
+                                currentUser.first_name,
+                                getFirstNameByPos(0),
+                                getFirstNameByPos(1)
+                        );
+                        break;
+                    case 4:
+                        txt = LocaleController.formatString(
+                                "GroupCreateMembersFour", R.string.GroupCreateMembersFour,
+                                currentUser.first_name,
+                                getFirstNameByPos(0),
+                                getFirstNameByPos(1),
+                                getFirstNameByPos(2)
+                        );
+                        break;
+                    case 5:
+                        txt = LocaleController.formatString(
+                                "GroupCreateMembersFive", R.string.GroupCreateMembersFive,
+                                currentUser.first_name,
+                                getFirstNameByPos(0),
+                                getFirstNameByPos(1),
+                                getFirstNameByPos(2),
+                                getFirstNameByPos(3)
+                        );
+                        break;
+                }
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            if (!TextUtils.isEmpty(txt)) {
+                editText.setText(txt);
+                editText.setSelection(0, editText.getText().length());
+            }
+        }
+    }
+
+    private String getFirstNameByPos(int pos) {
+        return getMessagesController().getUser(selectedContacts.get(pos)).first_name;
+    }
+
     @Override
     public View createView(Context context) {
         if (editText != null) {
@@ -276,7 +333,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
 
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(true);
-        actionBar.setTitle(LocaleController.getString("NewGroup", R.string.NewGroup));
+        actionBar.setTitle(LocaleController.getString(R.string.NewGroup));
 
         actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
             @Override
@@ -450,7 +507,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
         avatarImage.setRoundRadius(AndroidUtilities.dp(chatType == ChatObject.CHAT_TYPE_FORUM ? 16 : 32));
         avatarDrawable.setInfo(5, null, null);
         avatarImage.setImageDrawable(avatarDrawable);
-        avatarImage.setContentDescription(LocaleController.getString("ChoosePhoto", R.string.ChoosePhoto));
+        avatarImage.setContentDescription(LocaleController.getString(R.string.ChoosePhoto));
         editTextContainer.addView(avatarImage, LayoutHelper.createFrame(64, 64, Gravity.TOP | (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT), LocaleController.isRTL ? 0 : 16, 16, LocaleController.isRTL ? 16 : 0, 16));
 
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -529,11 +586,13 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
         showAvatarProgress(false, false);
 
         editText = new EditTextEmoji(context, sizeNotifierFrameLayout, this, EditTextEmoji.STYLE_FRAGMENT, false);
-        editText.setHint(chatType == ChatObject.CHAT_TYPE_CHAT || chatType == ChatObject.CHAT_TYPE_MEGAGROUP || chatType == ChatObject.CHAT_TYPE_FORUM ? LocaleController.getString("EnterGroupNamePlaceholder", R.string.EnterGroupNamePlaceholder) : LocaleController.getString("EnterListName", R.string.EnterListName));
+        editText.setHint(chatType == ChatObject.CHAT_TYPE_CHAT || chatType == ChatObject.CHAT_TYPE_MEGAGROUP || chatType == ChatObject.CHAT_TYPE_FORUM ? LocaleController.getString(R.string.EnterGroupNamePlaceholder) : LocaleController.getString(R.string.EnterListName));
         if (nameToSet != null) {
             editText.setText(nameToSet);
+            editText.setSelection(editText.getText().length());
             nameToSet = null;
         }
+        setDefaultGroupName();
         InputFilter[] inputFilters = new InputFilter[1];
         inputFilters[0] = new InputFilter.LengthFilter(100);
         editText.setFilters(inputFilters);
@@ -659,7 +718,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
         floatingButtonIcon.setColorFilter(new PorterDuffColorFilter(Theme.getColor(Theme.key_chats_actionIcon), PorterDuff.Mode.MULTIPLY));
         floatingButtonIcon.setImageResource(R.drawable.checkbig);
         floatingButtonIcon.setPadding(0, AndroidUtilities.dp(2), 0, 0);
-        floatingButtonContainer.setContentDescription(LocaleController.getString("Done", R.string.Done));
+        floatingButtonContainer.setContentDescription(LocaleController.getString(R.string.Done));
         floatingButtonContainer.addView(floatingButtonIcon, LayoutHelper.createFrame(Build.VERSION.SDK_INT >= 21 ? 56 : 60, Build.VERSION.SDK_INT >= 21 ? 56 : 60));
 
         progressView = new ContextProgressView(context, 1);
@@ -942,10 +1001,10 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
             items.add(new InnerItem(VIEW_TYPE_SHADOW_SECTION_CELL));
             if (chatType == ChatObject.CHAT_TYPE_FORUM) {
                 items.add(new InnerItem(VIEW_TYPE_TOPICS));
-                items.add(new InnerItem(VIEW_TYPE_TEXT_INFO_CELL, LocaleController.getString("ForumToggleDescription", R.string.ForumToggleDescription)));
+                items.add(new InnerItem(VIEW_TYPE_TEXT_INFO_CELL, LocaleController.getString(R.string.ForumToggleDescription)));
             } else {
                 items.add(new InnerItem(VIEW_TYPE_AUTO_DELETE));
-                items.add(new InnerItem(VIEW_TYPE_TEXT_INFO_CELL, LocaleController.getString("GroupCreateAutodeleteDescription", R.string.GroupCreateAutodeleteDescription)));
+                items.add(new InnerItem(VIEW_TYPE_TEXT_INFO_CELL, LocaleController.getString(R.string.GroupCreateAutodeleteDescription)));
             }
             if (currentGroupCreateAddress != null) {
                 items.add(new InnerItem(VIEW_TYPE_HEADER_CELL));
@@ -980,7 +1039,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
             switch (viewType) {
                 case VIEW_TYPE_SHADOW_SECTION_CELL: {
                     view = new ShadowSectionCell(context);
-                    Drawable drawable = Theme.getThemedDrawable(context, R.drawable.greydivider_top, Theme.key_windowBackgroundGrayShadow);
+                    Drawable drawable = Theme.getThemedDrawableByKey(context, R.drawable.greydivider_top, Theme.key_windowBackgroundGrayShadow);
                     CombinedDrawable combinedDrawable = new CombinedDrawable(new ColorDrawable(Theme.getColor(Theme.key_windowBackgroundGray)), drawable);
                     combinedDrawable.setFullsize(true);
                     view.setBackgroundDrawable(combinedDrawable);
@@ -999,7 +1058,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                     break;
                 case VIEW_TYPE_TEXT_INFO_CELL:
                     view = new TextInfoPrivacyCell(context);
-                    Drawable drawable = Theme.getThemedDrawable(context, selectedContacts.size() == 0 ? R.drawable.greydivider_bottom : R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow);
+                    Drawable drawable = Theme.getThemedDrawableByKey(context, selectedContacts.size() == 0 ? R.drawable.greydivider_bottom : R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow);
                     CombinedDrawable combinedDrawable = new CombinedDrawable(new ColorDrawable(Theme.getColor(Theme.key_windowBackgroundGray)), drawable);
                     combinedDrawable.setFullsize(true);
                     view.setBackgroundDrawable(combinedDrawable);
@@ -1027,7 +1086,7 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                 case VIEW_TYPE_HEADER_CELL: {
                     HeaderCell cell = (HeaderCell) holder.itemView;
                     if (currentGroupCreateAddress != null && position == 1) {
-                        cell.setText(LocaleController.getString("AttachLocation", R.string.AttachLocation));
+                        cell.setText(LocaleController.getString(R.string.AttachLocation));
                     } else {
                         cell.setText(LocaleController.formatPluralString("Members", selectedContacts.size()));
                     }
@@ -1049,16 +1108,16 @@ public class GroupCreateFinalActivity extends BaseFragment implements Notificati
                     TextCell textCell = (TextCell) holder.itemView;
                     String value;
                     if (ttlPeriod == 0) {
-                        value = LocaleController.getString("PasswordOff", R.string.PasswordOff);
+                        value = LocaleController.getString(R.string.PasswordOff);
                     } else {
                         value = LocaleController.formatTTLString(ttlPeriod);
                     }
-                    textCell.setTextAndValueAndIcon(LocaleController.getString("AutoDeleteMessages", R.string.AutoDeleteMessages), value, fragmentBeginToShow, R.drawable.msg_autodelete, false);
+                    textCell.setTextAndValueAndIcon(LocaleController.getString(R.string.AutoDeleteMessages), value, fragmentBeginToShow, R.drawable.msg_autodelete, false);
                     break;
                 }
                 case VIEW_TYPE_TOPICS: {
                     TextCell textCell = (TextCell) holder.itemView;
-                    textCell.setTextAndCheckAndIcon(LocaleController.getString("ChannelTopics", R.string.ChannelTopics), true, R.drawable.msg_topics, false);
+                    textCell.setTextAndCheckAndIcon(LocaleController.getString(R.string.ChannelTopics), true, R.drawable.msg_topics, false);
                     textCell.getCheckBox().setAlpha(.75f);
                     break;
                 }

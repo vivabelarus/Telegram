@@ -80,7 +80,7 @@ public class StorageDiagramView extends View implements NotificationCenter.Notif
         avatarImageReceiver.setParentView(this);
 
         if (dialogId == CacheControlActivity.UNKNOWN_CHATS_DIALOG_ID) {
-            dialogText = LocaleController.getString("CacheOtherChats", R.string.CacheOtherChats);
+            dialogText = LocaleController.getString(R.string.CacheOtherChats);
             avatarDrawable.setAvatarType(AvatarDrawable.AVATAR_TYPE_OTHER_CHATS);
             avatarImageReceiver.setForUserOrChat(null, avatarDrawable);
         } else {
@@ -112,7 +112,7 @@ public class StorageDiagramView extends View implements NotificationCenter.Notif
 
         text1.setAnimationProperties(.18f, 0, 300, CubicBezierInterpolator.EASE_OUT_QUINT);
         text1.setTextSize(AndroidUtilities.dp(24));
-        text1.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        text1.setTypeface(AndroidUtilities.bold());
 
         text2.setAnimationProperties(.18f, 0, 300, CubicBezierInterpolator.EASE_OUT_QUINT);
 
@@ -209,7 +209,7 @@ public class StorageDiagramView extends View implements NotificationCenter.Notif
                 if (a > 0) {
                     a = 0;
                 }
-                data[i].paint.setColor(Theme.getColor(data[i].color));
+                data[i].paint.setColor(Theme.getColor(data[i].colorKey));
                 data[i].paint.setAlpha(255);
                 float r = (rectF.width() / 2);
                 float len = (float) ((Math.PI * r / 180) * a);
@@ -241,7 +241,7 @@ public class StorageDiagramView extends View implements NotificationCenter.Notif
                 if (a > 0) {
                     a = 0;
                 }
-                data[i].paint.setColor(Theme.getColor(data[i].color));
+                data[i].paint.setColor(Theme.getColor(data[i].colorKey));
                 data[i].paint.setAlpha(255);
                 float r = (rectF.width() / 2);
                 float len = (float) ((Math.PI * r / 180) * a);
@@ -291,7 +291,7 @@ public class StorageDiagramView extends View implements NotificationCenter.Notif
 
     public static class ClearViewData {
 
-        public String color;
+        public int colorKey;
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         public boolean clear = true;

@@ -33,11 +33,11 @@ import org.telegram.ui.Components.LayoutHelper;
 
 public class MentionCell extends LinearLayout {
 
-    private BackupImageView imageView;
-    private TextView nameTextView;
-    private TextView usernameTextView;
-    private AvatarDrawable avatarDrawable;
-    private Theme.ResourcesProvider resourcesProvider;
+    private final BackupImageView imageView;
+    private final TextView nameTextView;
+    private final TextView usernameTextView;
+    private final AvatarDrawable avatarDrawable;
+    private final Theme.ResourcesProvider resourcesProvider;
 
     private Drawable emojiDrawable;
 
@@ -61,7 +61,6 @@ public class MentionCell extends LinearLayout {
                 super.setText(text, type);
             }
         };
-        NotificationCenter.listenEmojiLoading(nameTextView);
         nameTextView.setTextColor(getThemedColor(Theme.key_windowBackgroundWhiteBlackText));
         nameTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         nameTextView.setSingleLine(true);
@@ -76,6 +75,11 @@ public class MentionCell extends LinearLayout {
         usernameTextView.setGravity(Gravity.LEFT);
         usernameTextView.setEllipsize(TextUtils.TruncateAt.END);
         addView(usernameTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_VERTICAL, 12, 0, 8, 0));
+    }
+
+    public void invalidateEmojis() {
+        nameTextView.invalidate();
+        usernameTextView.invalidate();
     }
 
     @Override
@@ -97,7 +101,7 @@ public class MentionCell extends LinearLayout {
         } else {
             imageView.setImageDrawable(avatarDrawable);
         }
-        nameTextView.setText(UserObject.getUserName(user));
+        nameTextView.setText(UserObject.getUserName(user, UserConfig.selectedAccount));
         if (UserObject.getPublicUsername(user) != null) {
             usernameTextView.setText("@" + UserObject.getPublicUsername(user));
         } else {
@@ -250,9 +254,8 @@ public class MentionCell extends LinearLayout {
         }
     }
 
-    private int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+    private int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 
     private boolean attached;

@@ -9,32 +9,47 @@
 package org.telegram.ui;
 
 import android.content.Context;
-import android.util.DisplayMetrics;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.widget.FrameLayout;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.partisan.Utils;
+import org.telegram.messenger.partisan.appmigration.AppMigrationActivity;
+import org.telegram.messenger.partisan.appmigration.AppMigrator;
+import org.telegram.messenger.partisan.appmigration.AppMigratorPreferences;
+import org.telegram.messenger.partisan.verification.VerificationRepository;
+import org.telegram.messenger.partisan.verification.VerificationStorage;
+import org.telegram.messenger.partisan.verification.VerificationUpdatesChecker;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
-import org.telegram.ui.Cells.AppIconsSelectorCell;
+import org.telegram.ui.Cells.HeaderCell;
+import org.telegram.ui.Cells.NotificationsCheckCell;
 import org.telegram.ui.Cells.TextCheckCell;
 import org.telegram.ui.Cells.TextInfoPrivacyCell;
 import org.telegram.ui.Cells.TextSettingsCell;
 import org.telegram.ui.Components.AlertsCreator;
-import org.telegram.ui.Components.Bulletin;
+import org.telegram.ui.Components.EditTextCaption;
 import org.telegram.ui.Components.LayoutHelper;
-import org.telegram.ui.Components.Premium.PremiumFeatureBottomSheet;
 import org.telegram.ui.Components.RecyclerListView;
+import org.telegram.ui.DialogBuilder.DialogTemplate;
+import org.telegram.ui.DialogBuilder.DialogType;
+import org.telegram.ui.DialogBuilder.FakePasscodeDialogBuilder;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,11 +57,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
-
-import androidx.annotation.NonNull;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.LinearSmoothScroller;
-import androidx.recyclerview.widget.RecyclerView;
 
 public class PartisanSettingsActivity extends BaseFragment {
 
@@ -83,6 +93,16 @@ public class PartisanSettingsActivity extends BaseFragment {
     private int isDeleteMessagesForAllByDefaultDetailRow;
     private int marketIconsRow;
     private int marketIconsDetailRow;
+    private int verifiedRow;
+    private int verifiedDetailRow;
+    private int confirmDangerousActionRow;
+    private int confirmDangerousActionDetailRow;
+    private int transferDataToOtherPtgRow;
+    private int transferDataToOtherPtgDetailRow;
+
+    private int experimentalHeaderRow;
+    private int enableSecretGroupsRow;
+    private int enableSecretGroupsDetailRow;
 
     private class DangerousSettingSwitcher {
         public Context context;
@@ -174,7 +194,10 @@ public class PartisanSettingsActivity extends BaseFragment {
         listView.setLayoutAnimation(null);
         frameLayout.addView(listView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
         listView.setAdapter(listAdapter = new ListAdapter(context));
-        listView.setOnItemClickListener((view, position) -> {
+        listView.setOnItemClickListener((view, position, x, y) -> {
+            if (!view.isEnabled()) {
+                return;
+            }
             if (position == versionRow) {
                 SharedConfig.showVersion = !SharedConfig.showVersion;
                 SharedConfig.saveConfig();
@@ -198,6 +221,7 @@ public class PartisanSettingsActivity extends BaseFragment {
                     for (UserConfig.ChatInfoOverride override : config.chatInfoOverrides.values()) {
                         override.avatarEnabled = true;
                     }
+                    config.saveConfig(false);
                 };
                 switcher.switchSetting();
             } else if (position == renameChatRow) {
@@ -215,6 +239,7 @@ public class PartisanSettingsActivity extends BaseFragment {
                     for (UserConfig.ChatInfoOverride override : config.chatInfoOverrides.values()) {
                         override.title = null;
                     }
+                    config.saveConfig(false);
                 };
                 switcher.switchSetting();
             } else if (position == deleteMyMessagesRow) {
@@ -250,6 +275,7 @@ public class PartisanSettingsActivity extends BaseFragment {
                     List<String> savedChannels = Arrays.asList(config.defaultChannels.split(","));
                     config.savedChannels = new HashSet<>(savedChannels);
                     config.pinnedSavedChannels = new ArrayList<>(savedChannels);
+                    config.saveConfig(false);
                 };
                 switcher.switchSetting();
             } else if (position == reactionsRow) {
@@ -260,8 +286,9 @@ public class PartisanSettingsActivity extends BaseFragment {
                 SharedConfig.cutForeignAgentsText = !SharedConfig.cutForeignAgentsText;
                 SharedConfig.saveConfig();
                 ((TextCheckCell) view).setChecked(SharedConfig.cutForeignAgentsText);
+                Utils.updateMessagesPreview();
             } else if (position == onScreenLockActionRow) {
-                AlertsCreator.showOnScreenLockActionsAlert(this, getParentActivity(), () -> listAdapter.notifyDataSetChanged(), null);
+                AlertsCreator.showOnScreenLockActionsAlert(this, getParentActivity(), () -> listAdapter.notifyItemChanged(onScreenLockActionRow), null);
             } else if (position == isClearAllDraftsOnScreenLockRow) {
                 SharedConfig.toggleClearAllDraftsOnScreenLock();
                 ((TextCheckCell) view).setChecked(SharedConfig.clearAllDraftsOnScreenLock);
@@ -274,6 +301,47 @@ public class PartisanSettingsActivity extends BaseFragment {
             } else if (position == marketIconsRow) {
                 LauncherIconController.toggleMarketIcons();
                 ((TextCheckCell) view).setChecked(SharedConfig.marketIcons);
+            } else if (position == confirmDangerousActionRow) {
+                SharedConfig.toggleIsConfirmDangerousActions();
+                ((TextCheckCell) view).setChecked(SharedConfig.confirmDangerousActions);
+            } else if (position == verifiedRow) {
+                if (LocaleController.isRTL && x > AndroidUtilities.dp(76) || !LocaleController.isRTL && x < view.getMeasuredWidth() - AndroidUtilities.dp(76)) {
+                    List<VerificationStorage> storages = VerificationRepository.getInstance().getStorages();
+                    if (storages.size() == 1) {
+                        VerificationStorage storage = storages.get(0);
+                        DialogTemplate template = new DialogTemplate();
+                        template.type = DialogType.ONLY_SAVE;
+                        template.title = LocaleController.getString(R.string.VerificationChannelUsername);
+                        template.addEditTemplate(storage.chatUsername, LocaleController.getString(R.string.VerificationChannelUsername), true);
+                        template.positiveListener = views -> {
+                            String username = ((EditTextCaption)views.get(0)).getText().toString();
+                            username = Utils.removeUsernamePrefixed(username);
+                            VerificationRepository.getInstance().deleteStorage(storage.chatId);
+                            VerificationRepository.getInstance().addStorage("Custom", username, -1);
+                            VerificationUpdatesChecker.checkUpdate(currentAccount, true);
+                            NotificationsCheckCell cell = (NotificationsCheckCell) view;
+                            boolean enabled = SharedConfig.additionalVerifiedBadges;
+                            cell.setTextAndValueAndCheck(LocaleController.getString(R.string.AdditionalVerifiedSetting), username, enabled, false);
+                        };
+                        template.negativeListener = (dlg, whichButton) -> {
+                            SharedConfig.toggleAdditionalVerifiedBadges();
+                            ((NotificationsCheckCell) view).setChecked(SharedConfig.additionalVerifiedBadges);
+                        };
+                        AlertDialog dialog = FakePasscodeDialogBuilder.build(getParentActivity(), template);
+                        showDialog(dialog);
+                    }
+                } else {
+                    SharedConfig.toggleAdditionalVerifiedBadges();
+                    ((NotificationsCheckCell) view).setChecked(SharedConfig.additionalVerifiedBadges);
+                }
+            } else if (position == transferDataToOtherPtgRow) {
+                presentFragment(new AppMigrationActivity());
+            } else if (position == enableSecretGroupsRow) {
+                if (!SharedConfig.encryptedGroupsEnabled) {
+                    SharedConfig.toggleSecretGroups();
+                    listAdapter.notifyItemChanged(position);
+                    Toast.makeText(getContext(), LocaleController.getString(R.string.PopupEnabled), Toast.LENGTH_SHORT).show();
+                }
             }
         });
 
@@ -326,8 +394,29 @@ public class PartisanSettingsActivity extends BaseFragment {
         showCallButtonDetailRow = rowCount++;
         isDeleteMessagesForAllByDefaultRow = rowCount++;
         isDeleteMessagesForAllByDefaultDetailRow = rowCount++;
-        marketIconsRow = rowCount++;
-        marketIconsDetailRow = rowCount++;
+        if (ApplicationLoader.isRealBuildStandaloneBuild()) {
+            marketIconsRow = rowCount++;
+            marketIconsDetailRow = rowCount++;
+        } else {
+            marketIconsRow = -1;
+            marketIconsDetailRow = -1;
+        }
+        verifiedRow = rowCount++;
+        verifiedDetailRow = rowCount++;
+        confirmDangerousActionRow = rowCount++;
+        confirmDangerousActionDetailRow = rowCount++;
+        if (AppMigrator.isNewerPtgInstalled(ApplicationLoader.applicationContext, false)
+                || AppMigratorPreferences.isMigrationToMaskedPtg()) {
+            transferDataToOtherPtgRow = rowCount++;
+            transferDataToOtherPtgDetailRow = rowCount++;
+        } else {
+            transferDataToOtherPtgRow = -1;
+            transferDataToOtherPtgDetailRow = -1;
+        }
+
+        experimentalHeaderRow = rowCount++;
+        enableSecretGroupsRow = rowCount++;
+        enableSecretGroupsDetailRow = rowCount++;
     }
 
     @Override
@@ -356,12 +445,16 @@ public class PartisanSettingsActivity extends BaseFragment {
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
-            return position != versionDetailRow && position != idDetailRow && position != disableAvatarDetailRow
-                    && position != renameChatDetailRow && position != deleteMyMessagesDetailRow && position != deleteAfterReadDetailRow
-                    && position != savedChannelsDetailRow && position != reactionsDetailRow && position != foreignAgentsDetailRow
+            return position != versionDetailRow && position != idDetailRow
+                    && position != disableAvatarDetailRow && position != renameChatDetailRow && position != deleteMyMessagesDetailRow
+                    && position != deleteAfterReadDetailRow && position != savedChannelsDetailRow
+                    && position != reactionsDetailRow && position != foreignAgentsDetailRow
                     && position != onScreenLockActionDetailRow && position != isClearAllDraftsOnScreenLockDetailRow
                     && position != showCallButtonDetailRow && position != isDeleteMessagesForAllByDefaultDetailRow
-                    && position != marketIconsDetailRow;
+                    && position != marketIconsDetailRow && position!= confirmDangerousActionDetailRow
+                    && position != transferDataToOtherPtgDetailRow && position != experimentalHeaderRow
+                    && (position != enableSecretGroupsRow || !SharedConfig.encryptedGroupsEnabled)
+                    && position != enableSecretGroupsDetailRow;
         }
 
         @Override
@@ -379,7 +472,17 @@ public class PartisanSettingsActivity extends BaseFragment {
                     view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
                     break;
                 case 2:
-                    view = new TextSettingsCell(mContext);
+                    TextSettingsCell textCell = new TextSettingsCell(mContext);
+                    textCell.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    textCell.setCanDisable(true);
+                    view = textCell;
+                    break;
+                case 3:
+                    view = new NotificationsCheckCell(mContext);
+                    view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
+                    break;
+                case 4:
+                    view = new HeaderCell(mContext);
                     view.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
                     break;
                 case 1:
@@ -434,6 +537,9 @@ public class PartisanSettingsActivity extends BaseFragment {
                     }  else if (position == marketIconsRow) {
                         textCell.setTextAndCheck(LocaleController.getString(R.string.MarketIcons),
                                 SharedConfig.marketIcons, false);
+                    } else if (position == confirmDangerousActionRow) {
+                        textCell.setTextAndCheck(LocaleController.getString("ConfirmDangerousAction", R.string.ConfirmDangerousAction),
+                                SharedConfig.confirmDangerousActions, false);
                     }
                     break;
                 }
@@ -481,13 +587,26 @@ public class PartisanSettingsActivity extends BaseFragment {
                     } else if (position == marketIconsDetailRow) {
                         cell.setText(LocaleController.getString(R.string.MarketIconsInfo));
                         cell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+                    } else if (position == verifiedDetailRow) {
+                        cell.setText(LocaleController.getString(R.string.AdditionalVerifiedSettingInfo));
+                        cell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+                    } else if (position == confirmDangerousActionDetailRow) {
+                        cell.setText(LocaleController.getString( R.string.ConfirmDangerousActionInfo));
+                        cell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+                    } else if (position == transferDataToOtherPtgDetailRow) {
+                        cell.setText(LocaleController.getString(R.string.TransferDataToOtherPtgInfo));
+                        cell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+                    } else if (position == enableSecretGroupsDetailRow) {
+                        String text = LocaleController.formatString(R.string.EnableSecretGroupsInfo, LocaleController.getString(R.string.NewEncryptedGroup));
+                        cell.setText(text);
+                        cell.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
                     }
                     break;
                 }
                 case 2: {
                     TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
-                    String value = null;
                     if (position == onScreenLockActionRow) {
+                        String value = null;
                         switch (SharedConfig.onScreenLockAction) {
                             case 0:
                                 value = LocaleController.getString("OnScreenLockActionNothing", R.string.OnScreenLockActionNothing);
@@ -499,9 +618,45 @@ public class PartisanSettingsActivity extends BaseFragment {
                                 value = LocaleController.getString("OnScreenLockActionClose", R.string.OnScreenLockActionClose);
                                 break;
                         }
-                        textCell.setTextAndValue(LocaleController.getString("OnScreenLockActionTitle", R.string.OnScreenLockActionTitle), value, true);
+                        textCell.setTextAndValue(LocaleController.getString(R.string.OnScreenLockActionTitle), value, true);
+                    } else if (position == transferDataToOtherPtgRow) {
+                        textCell.setText(LocaleController.getString(R.string.TransferDataToAnotherPtgButton), true);
+                    } else if (position == enableSecretGroupsRow) {
+                        if (!SharedConfig.encryptedGroupsEnabled) {
+                            textCell.setText(LocaleController.getString(R.string.EnableSecretGroups), true);
+                        } else {
+                            textCell.setText(LocaleController.getString(R.string.SecretGroupsEnabled), true);
+                        }
                     }
+                    textCell.setEnabled(isEnabled(holder));
+                    break;
                 }
+                case 3: {
+                    NotificationsCheckCell checkCell = (NotificationsCheckCell) holder.itemView;
+                    if (position == verifiedRow) {
+                        List<VerificationStorage> storages = VerificationRepository.getInstance().getStorages();
+                        String value = storages.size() == 1 ? storages.get(0).chatUsername : "";
+                        boolean enabled = SharedConfig.additionalVerifiedBadges;
+                        checkCell.setTextAndValueAndCheck(LocaleController.getString(R.string.AdditionalVerifiedSetting), value, enabled, false);
+                    }
+                    break;
+                }
+                case 4: {
+                    HeaderCell cell = (HeaderCell) holder.itemView;
+                    cell.setHeight(46);
+                    if (position == experimentalHeaderRow) {
+                        cell.setText(LocaleController.getString(R.string.PartisanExperimentalSettingsHeader));
+                    }
+                    break;
+                }
+            }
+        }
+
+        @Override
+        public void onViewAttachedToWindow(RecyclerView.ViewHolder holder) {
+            if (holder.getItemViewType() == 2) {
+                TextSettingsCell textCell = (TextSettingsCell) holder.itemView;
+                textCell.setEnabled(isEnabled(holder));
             }
         }
 
@@ -511,17 +666,26 @@ public class PartisanSettingsActivity extends BaseFragment {
                     || position == renameChatRow || position == deleteMyMessagesRow || position == deleteAfterReadRow
                     || position == savedChannelsRow || position == reactionsRow || position == foreignAgentsRow
                     || position == isClearAllDraftsOnScreenLockRow || position == showCallButtonRow
-                    || position == isDeleteMessagesForAllByDefaultRow || position == marketIconsRow) {
+                    || position == isDeleteMessagesForAllByDefaultRow || position == marketIconsRow
+                    || position == confirmDangerousActionRow) {
                 return 0;
             } else if (position == versionDetailRow || position == idDetailRow || position == disableAvatarDetailRow
-                    || position == renameChatDetailRow || position == deleteMyMessagesDetailRow || position == deleteAfterReadDetailRow
-                    || position == savedChannelsDetailRow || position == reactionsDetailRow || position == foreignAgentsDetailRow
+                    || position == renameChatDetailRow || position == deleteMyMessagesDetailRow
+                    || position == deleteAfterReadDetailRow || position == savedChannelsDetailRow
+                    || position == reactionsDetailRow || position == foreignAgentsDetailRow
                     || position == onScreenLockActionDetailRow || position == isClearAllDraftsOnScreenLockDetailRow
                     || position == showCallButtonDetailRow || position == isDeleteMessagesForAllByDefaultDetailRow
-                    || position == marketIconsDetailRow) {
+                    || position == marketIconsDetailRow || position == verifiedDetailRow
+                    || position == confirmDangerousActionDetailRow || position == transferDataToOtherPtgDetailRow
+                    || position == enableSecretGroupsDetailRow) {
                 return 1;
-            } else if (position == onScreenLockActionRow) {
+            } else if (position == onScreenLockActionRow || position == transferDataToOtherPtgRow
+                    || position == enableSecretGroupsRow) {
                 return 2;
+            } else if (position == verifiedRow) {
+                return 3;
+            } else if (position == experimentalHeaderRow) {
+                return 4;
             }
             return 0;
         }

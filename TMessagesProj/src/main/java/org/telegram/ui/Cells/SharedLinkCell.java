@@ -40,7 +40,7 @@ import org.telegram.messenger.ImageReceiver;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
-import org.telegram.messenger.fakepasscode.Utils;
+import org.telegram.messenger.partisan.Utils;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.Components.AnimatedEmojiDrawable;
@@ -196,7 +196,7 @@ public class SharedLinkCell extends FrameLayout {
         setFocusable(true);
 
         titleTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
-        titleTextPaint.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        titleTextPaint.setTypeface(AndroidUtilities.bold());
         titleTextPaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider));
 
         descriptionTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
@@ -211,7 +211,7 @@ public class SharedLinkCell extends FrameLayout {
 
         checkBox = new CheckBox2(context, 21, resourcesProvider);
         checkBox.setVisibility(INVISIBLE);
-        checkBox.setColor(null, Theme.key_windowBackgroundWhite, Theme.key_checkboxCheck);
+        checkBox.setColor(-1, Theme.key_windowBackgroundWhite, Theme.key_checkboxCheck);
         checkBox.setDrawUnchecked(false);
         checkBox.setDrawBackgroundAsArc(2);
         addView(checkBox, LayoutHelper.createFrame(24, 24, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 0 : 44, 44, LocaleController.isRTL ? 44 : 0, 0));
@@ -465,7 +465,9 @@ public class SharedLinkCell extends FrameLayout {
             if (currentPhotoObjectThumb == currentPhotoObject) {
                 currentPhotoObjectThumb = null;
             }
-            currentPhotoObject.size = -1;
+            if (currentPhotoObject != null) {
+                currentPhotoObject.size = -1;
+            }
             if (currentPhotoObjectThumb != null) {
                 currentPhotoObjectThumb.size = -1;
             }
@@ -478,7 +480,7 @@ public class SharedLinkCell extends FrameLayout {
         }
 
         if (viewType == VIEW_TYPE_GLOBAL_SEARCH) {
-            fromInfoLayout = ChatMessageCell.generateStaticLayout(FilteredSearchView.createFromInfoString(message), description2TextPaint, maxWidth, maxWidth, 0, desctiptionLines);
+            fromInfoLayout = ChatMessageCell.generateStaticLayout(FilteredSearchView.createFromInfoString(message, true, 2, description2TextPaint), description2TextPaint, maxWidth, maxWidth, 0, desctiptionLines);
             fromInfoLayoutEmojis = AnimatedEmojiSpan.update(AnimatedEmojiDrawable.CACHE_TYPE_MESSAGES, this, fromInfoLayoutEmojis, fromInfoLayout);
         }
 
@@ -800,7 +802,7 @@ public class SharedLinkCell extends FrameLayout {
             descriptionTextPaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider));
             canvas.save();
             canvas.translate(AndroidUtilities.dp(LocaleController.isRTL ? 8 : AndroidUtilities.leftBaseline), descriptionY);
-            SpoilerEffect.renderWithRipple(this, false, descriptionTextPaint.getColor(), -AndroidUtilities.dp(2), patchedDescriptionLayout, descriptionLayout, descriptionLayoutSpoilers, canvas, false);
+            SpoilerEffect.renderWithRipple(this, false, descriptionTextPaint.getColor(), -AndroidUtilities.dp(2), patchedDescriptionLayout, 0, descriptionLayout, descriptionLayoutSpoilers, canvas, false);
             canvas.restore();
         }
 
@@ -808,7 +810,7 @@ public class SharedLinkCell extends FrameLayout {
             descriptionTextPaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText, resourcesProvider));
             canvas.save();
             canvas.translate(AndroidUtilities.dp(LocaleController.isRTL ? 8 : AndroidUtilities.leftBaseline), description2Y);
-            SpoilerEffect.renderWithRipple(this, false, descriptionTextPaint.getColor(), -AndroidUtilities.dp(2), patchedDescriptionLayout2, descriptionLayout2, descriptionLayout2Spoilers, canvas, false);
+            SpoilerEffect.renderWithRipple(this, false, descriptionTextPaint.getColor(), -AndroidUtilities.dp(2), patchedDescriptionLayout2, 0, descriptionLayout2, descriptionLayout2Spoilers, canvas, false);
             canvas.restore();
         }
 

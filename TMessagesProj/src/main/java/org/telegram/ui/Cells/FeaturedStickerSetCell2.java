@@ -103,7 +103,7 @@ public class FeaturedStickerSetCell2 extends FrameLayout implements Notification
         addView(imageView, LayoutHelper.createFrame(48, 48, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, LocaleController.isRTL ? 0 : 12, 8, LocaleController.isRTL ? 12 : 0, 0));
 
         addButton = new ProgressButton(context);
-        addButton.setText(LocaleController.getString("Add", R.string.Add));
+        addButton.setText(LocaleController.getString(R.string.Add));
         addButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_buttonText));
         addView(addButton, LayoutHelper.createFrameRelatively(LayoutHelper.WRAP_CONTENT, 28, Gravity.TOP | Gravity.END, 0, 18, 14, 0));
 
@@ -111,13 +111,13 @@ public class FeaturedStickerSetCell2 extends FrameLayout implements Notification
         delButton.setGravity(Gravity.CENTER);
         delButton.setTextColor(Theme.getColor(Theme.key_featuredStickers_removeButtonText));
         delButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        delButton.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
-        delButton.setText(LocaleController.getString("StickersRemove", R.string.StickersRemove));
+        delButton.setTypeface(AndroidUtilities.bold());
+        delButton.setText(LocaleController.getString(R.string.StickersRemove));
         addView(delButton, LayoutHelper.createFrameRelatively(LayoutHelper.WRAP_CONTENT, 28, Gravity.TOP | Gravity.END, 0, 16, 14, 0));
 
-        unlockButton = new PremiumButtonView(context, AndroidUtilities.dp(4), false);
+        unlockButton = new PremiumButtonView(context, AndroidUtilities.dp(4), false, resourcesProvider);
         unlockButton.setIcon(R.raw.unlock_icon);
-        unlockButton.setButton(LocaleController.getString("Unlock", R.string.Unlock), e -> onPremiumButtonClick());
+        unlockButton.setButton(LocaleController.getString(R.string.Unlock), e -> onPremiumButtonClick());
         unlockButton.setVisibility(View.GONE);
         try {
             MarginLayoutParams iconLayout = (MarginLayoutParams) unlockButton.getIconView().getLayoutParams();
@@ -270,7 +270,7 @@ public class FeaturedStickerSetCell2 extends FrameLayout implements Notification
                     imageLocation = ImageLocation.getForSticker(thumb, sticker, set.set.thumb_version);
                 }
 
-                if (object instanceof TLRPC.Document && MessageObject.isAnimatedStickerDocument(sticker, true)) {
+                if (object instanceof TLRPC.Document && (MessageObject.isAnimatedStickerDocument(sticker, true) || MessageObject.isVideoSticker(sticker))) {
                     if (svgThumb != null) {
                         imageView.setImage(ImageLocation.getForDocument(sticker), "50_50", svgThumb, 0, set);
                     } else {
@@ -425,9 +425,8 @@ public class FeaturedStickerSetCell2 extends FrameLayout implements Notification
         descriptions.add(new ThemeDescription(null, 0, null, null, null, delegate, Theme.key_featuredStickers_addButtonPressed));
     }
 
-    private int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+    private int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 
     @Override

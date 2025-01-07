@@ -167,12 +167,12 @@ public class VoIPTextureView extends FrameLayout {
         screencastView.addView(screencastImage, LayoutHelper.createFrame(82, 82, Gravity.CENTER, 0, 0, 0, 60));
 
         screencastText = new TextView(getContext());
-        screencastText.setText(LocaleController.getString("VoipVideoScreenSharing", R.string.VoipVideoScreenSharing));
+        screencastText.setText(LocaleController.getString(R.string.VoipVideoScreenSharing));
         screencastText.setGravity(Gravity.CENTER);
         screencastText.setLineSpacing(AndroidUtilities.dp(2), 1.0f);
         screencastText.setTextColor(0xffffffff);
         screencastText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        screencastText.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        screencastText.setTypeface(AndroidUtilities.bold());
         screencastView.addView(screencastText, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 21, 28, 21, 0));
 
         if (applyRoundRadius) {

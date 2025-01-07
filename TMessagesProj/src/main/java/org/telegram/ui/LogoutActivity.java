@@ -30,6 +30,7 @@ import org.telegram.messenger.MessagesController;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
+import org.telegram.messenger.fakepasscode.FakePasscodeUtils;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
@@ -44,6 +45,7 @@ import org.telegram.ui.Components.AlertsCreator;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.Premium.LimitReachedBottomSheet;
 import org.telegram.ui.Components.RecyclerListView;
+import org.telegram.ui.DialogBuilder.MultiLogOutDialogBuilder;
 
 import java.util.ArrayList;
 
@@ -61,6 +63,7 @@ public class LogoutActivity extends BaseFragment {
     private int supportRow;
     private int alternativeSectionRow;
     private int logoutRow;
+    private int multiLogoutRow;
     private int logoutSectionRow;
     private int rowCount;
 
@@ -85,6 +88,11 @@ public class LogoutActivity extends BaseFragment {
         supportRow = rowCount++;
         alternativeSectionRow = rowCount++;
         logoutRow = rowCount++;
+        if (!FakePasscodeUtils.isFakePasscodeActivated() && UserConfig.getActivatedAccountsCount() > 1) {
+            multiLogoutRow = rowCount++;
+        } else {
+            multiLogoutRow = -1;
+        }
         logoutSectionRow = rowCount++;
 
         return true;
@@ -93,7 +101,7 @@ public class LogoutActivity extends BaseFragment {
     @Override
     public View createView(Context context) {
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
-        actionBar.setTitle(LocaleController.getString("LogOutTitle", R.string.LogOutTitle));
+        actionBar.setTitle(LocaleController.getString(R.string.LogOutTitle));
         if (AndroidUtilities.isTablet()) {
             actionBar.setOccupyStatusBar(false);
         }
@@ -136,7 +144,7 @@ public class LogoutActivity extends BaseFragment {
                 if (freeAccounts > 0 && availableAccount != null) {
                     presentFragment(new LoginActivity(availableAccount));
                 } else if (!UserConfig.hasPremiumOnAccounts()) {
-                    LimitReachedBottomSheet limitReachedBottomSheet = new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount);
+                    LimitReachedBottomSheet limitReachedBottomSheet = new LimitReachedBottomSheet(this, getContext(), TYPE_ACCOUNTS, currentAccount, null);
                     showDialog(limitReachedBottomSheet);
                 }
             } else if (position == passcodeRow) {
@@ -144,7 +152,9 @@ public class LogoutActivity extends BaseFragment {
             } else if (position == cacheRow) {
                 presentFragment(new CacheControlActivity());
             } else if (position == phoneRow) {
-                presentFragment(new ActionIntroActivity(ActionIntroActivity.ACTION_TYPE_CHANGE_PHONE_NUMBER));
+                AlertsCreator.showCantChangePhoneNumberDialogIfNeed(this, () -> {
+                    presentFragment(new ActionIntroActivity(ActionIntroActivity.ACTION_TYPE_CHANGE_PHONE_NUMBER_FAKE_PASSCODE));
+                });
             } else if (position == supportRow) {
                 showDialog(AlertsCreator.createSupportAlert(LogoutActivity.this, null));
             } else if (position == logoutRow) {
@@ -152,6 +162,11 @@ public class LogoutActivity extends BaseFragment {
                     return;
                 }
                 showDialog(makeLogOutDialog(getParentActivity(), currentAccount));
+            } else if (position == multiLogoutRow) {
+                if (getParentActivity() == null) {
+                    return;
+                }
+                showDialog(MultiLogOutDialogBuilder.makeMultiLogOutDialog(this));
             }
         });
 
@@ -160,14 +175,14 @@ public class LogoutActivity extends BaseFragment {
 
     public static AlertDialog makeLogOutDialog(Context context, int currentAccount) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
-        builder.setMessage(LocaleController.getString("AreYouSureLogout", R.string.AreYouSureLogout));
-        builder.setTitle(LocaleController.getString("LogOut", R.string.LogOut));
-        builder.setPositiveButton(LocaleController.getString("LogOut", R.string.LogOut), (dialogInterface, i) -> MessagesController.getInstance(currentAccount).performLogout(1));
-        builder.setNegativeButton(LocaleController.getString("Cancel", R.string.Cancel), null);
+        builder.setMessage(LocaleController.getString(R.string.AreYouSureLogout));
+        builder.setTitle(LocaleController.getString(R.string.LogOut));
+        builder.setPositiveButton(LocaleController.getString(R.string.LogOut), (dialogInterface, i) -> MessagesController.getInstance(currentAccount).performLogout(1));
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
         AlertDialog alertDialog = builder.create();
         TextView button = (TextView) alertDialog.getButton(DialogInterface.BUTTON_POSITIVE);
         if (button != null) {
-            button.setTextColor(Theme.getColor(Theme.key_dialogTextRed));
+            button.setTextColor(Theme.getColor(Theme.key_text_RedBold));
         }
         return alertDialog;
     }
@@ -204,37 +219,40 @@ public class LogoutActivity extends BaseFragment {
                 case 0: {
                     HeaderCell view = (HeaderCell) holder.itemView;
                     if (position == alternativeHeaderRow) {
-                        view.setText(LocaleController.getString("AlternativeOptions", R.string.AlternativeOptions));
+                        view.setText(LocaleController.getString(R.string.AlternativeOptions));
                     }
                     break;
                 }
                 case 1: {
                     TextDetailSettingsCell view = (TextDetailSettingsCell) holder.itemView;
                     if (position == addAccountRow) {
-                        view.setTextAndValueAndIcon(LocaleController.getString("AddAnotherAccount", R.string.AddAnotherAccount), LocaleController.getString("AddAnotherAccountInfo", R.string.AddAnotherAccountInfo), R.drawable.msg_contact_add, true);
+                        view.setTextAndValueAndIcon(LocaleController.getString(R.string.AddAnotherAccount), LocaleController.getString(R.string.AddAnotherAccountInfo), R.drawable.msg_contact_add, true);
                     } else if (position == passcodeRow) {
-                        view.setTextAndValueAndIcon(LocaleController.getString("SetPasscode", R.string.SetPasscode), LocaleController.getString("SetPasscodeInfo", R.string.SetPasscodeInfo), R.drawable.msg_permissions, true);
+                        view.setTextAndValueAndIcon(LocaleController.getString(R.string.SetPasscode), LocaleController.getString(R.string.SetPasscodeInfo), R.drawable.msg_permissions, true);
                     } else if (position == cacheRow) {
-                        view.setTextAndValueAndIcon(LocaleController.getString("ClearCache", R.string.ClearCache), LocaleController.getString("ClearCacheInfo", R.string.ClearCacheInfo), R.drawable.msg_clearcache, true);
+                        view.setTextAndValueAndIcon(LocaleController.getString(R.string.ClearCache), LocaleController.getString(R.string.ClearCacheInfo), R.drawable.msg_clearcache, true);
                     } else if (position == phoneRow) {
-                        view.setTextAndValueAndIcon(LocaleController.getString("ChangePhoneNumber", R.string.ChangePhoneNumber), LocaleController.getString("ChangePhoneNumberInfo", R.string.ChangePhoneNumberInfo), R.drawable.msg_newphone, true);
+                        view.setTextAndValueAndIcon(LocaleController.getString(R.string.ChangePhoneNumber), LocaleController.getString(R.string.ChangePhoneNumberInfo), R.drawable.msg_newphone, true);
                     } else if (position == supportRow) {
-                        view.setTextAndValueAndIcon(LocaleController.getString("ContactSupport", R.string.ContactSupport), LocaleController.getString("ContactSupportInfo", R.string.ContactSupportInfo), R.drawable.msg_help, false);
+                        view.setTextAndValueAndIcon(LocaleController.getString(R.string.ContactSupport), LocaleController.getString(R.string.ContactSupportInfo), R.drawable.msg_help, false);
                     }
                     break;
                 }
                 case 3: {
                     TextSettingsCell view = (TextSettingsCell) holder.itemView;
                     if (position == logoutRow) {
-                        view.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteRedText5));
-                        view.setText(LocaleController.getString("LogOutTitle", R.string.LogOutTitle), false);
+                        view.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
+                        view.setText(LocaleController.getString(R.string.LogOutTitle), true);
+                    } else if (position == multiLogoutRow) {
+                        view.setTextColor(Theme.getColor(Theme.key_text_RedRegular));
+                        view.setText(LocaleController.getString("MultiLogOutTitle", R.string.MultiLogOutTitle), false);
                     }
                     break;
                 }
                 case 4: {
                     TextInfoPrivacyCell view = (TextInfoPrivacyCell) holder.itemView;
                     if (position == logoutSectionRow) {
-                        view.setText(LocaleController.getString("LogOutInfo", R.string.LogOutInfo));
+                        view.setText(LocaleController.getString(R.string.LogOutInfo));
                     }
                     break;
                 }
@@ -244,7 +262,7 @@ public class LogoutActivity extends BaseFragment {
         @Override
         public boolean isEnabled(RecyclerView.ViewHolder holder) {
             int position = holder.getAdapterPosition();
-            return position == addAccountRow || position == passcodeRow || position == cacheRow || position == phoneRow || position == supportRow || position == logoutRow;
+            return position == addAccountRow || position == passcodeRow || position == cacheRow || position == phoneRow || position == supportRow || position == logoutRow || position == multiLogoutRow;
         }
 
         @Override
@@ -275,7 +293,7 @@ public class LogoutActivity extends BaseFragment {
                 case 4:
                 default: {
                     view = new TextInfoPrivacyCell(mContext);
-                    view.setBackgroundDrawable(Theme.getThemedDrawable(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
+                    view.setBackgroundDrawable(Theme.getThemedDrawableByKey(mContext, R.drawable.greydivider, Theme.key_windowBackgroundGrayShadow));
                     break;
                 }
             }
@@ -291,7 +309,7 @@ public class LogoutActivity extends BaseFragment {
                 return 1;
             } else if (position == alternativeSectionRow) {
                 return 2;
-            } else if (position == logoutRow) {
+            } else if (position == logoutRow || position == multiLogoutRow) {
                 return 3;
             } else {
                 return 4;
@@ -318,7 +336,7 @@ public class LogoutActivity extends BaseFragment {
 
         themeDescriptions.add(new ThemeDescription(listView, ThemeDescription.FLAG_BACKGROUNDFILTER, new Class[]{ShadowSectionCell.class}, null, null, null, Theme.key_windowBackgroundGrayShadow));
 
-        themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{TextSettingsCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteRedText5));
+        themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{TextSettingsCell.class}, new String[]{"textView"}, null, null, null, Theme.key_text_RedRegular));
 
         themeDescriptions.add(new ThemeDescription(listView, 0, new Class[]{HeaderCell.class}, new String[]{"textView"}, null, null, null, Theme.key_windowBackgroundWhiteBlueHeader));
 

@@ -1,4 +1,4 @@
-FROM gradle:7.0.2-jdk11
+FROM gradle:8.6-jdk17
 
 ENV ANDROID_SDK_URL https://dl.google.com/android/repository/commandlinetools-linux-7302050_latest.zip
 ENV ANDROID_API_LEVEL android-33
@@ -31,5 +31,5 @@ CMD mkdir -p /home/source/TMessagesProj/build/outputs/apk && \
     mkdir -p /home/source/TMessagesProj/build/outputs/native-debug-symbols && \
     cp -R /home/source/. /home/gradle && \
     cd /home/gradle && \
-    gradle :TMessagesProj_App:assembleAfatStandalone && \
-    cp -R /home/gradle/TMessagesProj_App/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk
+    gradle :TMessagesProj_AppStandalone:assembleAfatStandalone && \
+    cp -R /home/gradle/TMessagesProj_AppStandalone/build/outputs/apk/. /home/source/TMessagesProj/build/outputs/apk

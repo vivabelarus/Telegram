@@ -46,7 +46,7 @@ public class AvailableReactionCell extends FrameLayout {
         textView = new SimpleTextView(context);
         textView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
         textView.setTextSize(16);
-        textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textView.setTypeface(AndroidUtilities.bold());
         textView.setMaxLines(1);
         textView.setMaxLines(1);
         textView.setGravity(LayoutHelper.getAbsoluteGravityStart() | Gravity.CENTER_VERTICAL);
@@ -60,7 +60,7 @@ public class AvailableReactionCell extends FrameLayout {
         if (checkbox) {
             checkBox = new CheckBox2(context, 26, null);
             checkBox.setDrawUnchecked(false);
-            checkBox.setColor(null, null, Theme.key_radioBackgroundChecked);
+            checkBox.setColor(-1, -1, Theme.key_radioBackgroundChecked);
             checkBox.setDrawBackgroundAsArc(-1);
             addView(checkBox, LayoutHelper.createFrameRelatively(26, 26, Gravity.END | Gravity.CENTER_VERTICAL, 0, 0, 22, 0));
         } else {

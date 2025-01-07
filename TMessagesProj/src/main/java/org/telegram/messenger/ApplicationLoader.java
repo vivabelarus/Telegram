@@ -17,6 +17,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.res.Configuration;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -28,6 +29,7 @@ import android.os.Handler;
 import android.os.PowerManager;
 import android.os.SystemClock;
 import android.telephony.TelephonyManager;
+import android.view.ViewGroup;
 
 import androidx.annotation.NonNull;
 import androidx.multidex.MultiDex;
@@ -35,23 +37,35 @@ import androidx.multidex.MultiDex;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 
-import org.telegram.messenger.fakepasscode.FakePasscode;
+import org.json.JSONObject;
 import org.telegram.messenger.fakepasscode.FakePasscodeUtils;
+import org.telegram.messenger.fakepasscode.RemoveAfterReadingMessages;
+import org.telegram.messenger.partisan.PartisanLog;
+import org.telegram.messenger.partisan.update.UpdateData;
 import org.telegram.messenger.voip.VideoCapturerDevice;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
+import org.telegram.ui.ActionBar.BaseFragment;
+import org.telegram.ui.Adapters.DrawerLayoutAdapter;
 import org.telegram.ui.Components.ForegroundDetector;
+import org.telegram.ui.Components.Premium.boosts.BoostRepository;
+import org.telegram.ui.IUpdateButton;
+import org.telegram.ui.IUpdateLayout;
 import org.telegram.ui.LauncherIconController;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.util.ArrayList;
 import java.io.FileWriter;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
+import java.util.Locale;
 
 public class ApplicationLoader extends Application {
 
-    private static ApplicationLoader applicationLoaderInstance;
+    public static ApplicationLoader applicationLoaderInstance;
 
     @SuppressLint("StaticFieldLeak")
     public static volatile Context applicationContext;
@@ -132,8 +146,30 @@ public class ApplicationLoader extends Application {
         return applicationLoaderInstance.isHuaweiBuild();
     }
 
+    // This method actually returns whether the application should look like a standalone app
+    public static boolean isStandaloneBuild() {
+        return applicationLoaderInstance.isStandalone();
+    }
+
     protected boolean isHuaweiBuild() {
         return false;
+    }
+
+    private Boolean standaloneApp;
+    protected boolean isStandalone() {
+        if (!FakePasscodeUtils.isFakePasscodeActivated()) {
+            return true;
+        }
+        if (standaloneApp == null) {
+            standaloneApp = ApplicationLoader.applicationContext != null && isRealBuildStandaloneBuild();
+        }
+        return standaloneApp;
+    }
+
+    public static boolean isRealBuildStandaloneBuild() {
+        List<String> standalonePackageNames = Arrays.asList("org.telegram.messenger.web", "org.telegram.messenger.alpha");
+        String appPackageName = ApplicationLoader.applicationContext.getPackageName();
+        return standalonePackageNames.stream().anyMatch(name -> name.equals(appPackageName));
     }
 
     public static File getFilesDirFixed() {
@@ -159,6 +195,7 @@ public class ApplicationLoader extends Application {
             return;
         }
         applicationInited = true;
+        NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
 
         try {
             LocaleController.getInstance(); //TODO improve
@@ -211,14 +248,11 @@ public class ApplicationLoader extends Application {
 
         SharedConfig.loadConfig();
         SharedPrefsHelper.init(applicationContext);
-        if (filesCopiedFromUpdater && !SharedConfig.filesCopiedFromOldTelegram) {
-            SharedConfig.filesCopiedFromOldTelegram = true;
-            SharedConfig.saveConfig();
-            SharedConfig.reloadConfig();
-        }
-        if (BuildVars.LOGS_ENABLED && SharedConfig.fakePasscodeActivatedIndex == -1) {
+        checkFiledCopiedFromOldTelegram();
+        if (SharedConfig.saveLogcatAfterRestart) {
             saveLogcatFile();
         }
+        RemoveAfterReadingMessages.runChecker();
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) { //TODO improve account
             UserConfig.getInstance(a).loadConfig();
             MessagesController.getInstance(a);
@@ -246,8 +280,23 @@ public class ApplicationLoader extends Application {
             ContactsController.getInstance(a).checkAppAccount();
             DownloadController.getInstance(a);
         }
-        ChatThemeController.init();
         BillingController.getInstance().startConnection();
+    }
+
+    private static void checkFiledCopiedFromOldTelegram() {
+        if (filesCopiedFromUpdater && !SharedConfig.filesCopiedFromOldTelegram) {
+            PartisanLog.d("Remove migration preferences from config");
+            SharedConfig.filesCopiedFromOldTelegram = true;
+            applicationContext.getSharedPreferences("mainconfig", Activity.MODE_PRIVATE).edit()
+                    .remove("ptgMigrationStep")
+                    .remove("ptgMigrationMaxCancelledInstallationDate")
+                    .remove("migratedPackageName")
+                    .remove("migratedDate")
+                    .remove("installedMaskedPtgPackageName")
+                    .apply();
+            SharedConfig.saveConfig();
+            SharedConfig.reloadConfig();
+        }
     }
 
     public ApplicationLoader() {
@@ -258,9 +307,9 @@ public class ApplicationLoader extends Application {
     public void onCreate() {
         File updaterFilesCopied = new File(getFilesDir(), "updater_files_copied");
         if (updaterFilesCopied.exists()) {
-            if (copyUpdaterDirectory("shared_prefs") | copyUpdaterDirectory("files")) {
-                filesCopiedFromUpdater = true;
-            }
+            filesCopiedFromUpdater = true;
+            copyUpdaterDirectory("shared_prefs");
+            copyUpdaterDirectory("files");
             updaterFilesCopied.delete();
         }
 
@@ -275,14 +324,39 @@ public class ApplicationLoader extends Application {
 
         if (BuildVars.LOGS_ENABLED) {
             FileLog.d("app start time = " + (startTime = SystemClock.elapsedRealtime()));
-            FileLog.d("buildVersion = " + BuildVars.BUILD_VERSION);
+            try {
+                final PackageInfo info = ApplicationLoader.applicationContext.getPackageManager().getPackageInfo(ApplicationLoader.applicationContext.getPackageName(), 0);
+                final String abi;
+                switch (info.versionCode % 10) {
+                    case 1:
+                    case 2:
+                        abi = "store bundled " + Build.CPU_ABI + " " + Build.CPU_ABI2;
+                        break;
+                    default:
+                    case 9:
+                        if (ApplicationLoader.isStandaloneBuild()) {
+                            abi = "direct " + Build.CPU_ABI + " " + Build.CPU_ABI2;
+                        } else {
+                            abi = "universal " + Build.CPU_ABI + " " + Build.CPU_ABI2;
+                        }
+                        break;
+                }
+                FileLog.d("buildVersion = " + String.format(Locale.US, "v%s (%d[%d]) %s", info.versionName, info.versionCode / 10, info.versionCode % 10, abi));
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+            FileLog.d("device = manufacturer=" + Build.MANUFACTURER + ", device=" + Build.DEVICE + ", model=" + Build.MODEL + ", product=" + Build.PRODUCT);
         }
         if (applicationContext == null) {
             applicationContext = getApplicationContext();
         }
 
         NativeLoader.initNativeLibs(ApplicationLoader.applicationContext);
-        ConnectionsManager.native_setJava(false);
+        try {
+            ConnectionsManager.native_setJava(false);
+        } catch (UnsatisfiedLinkError error) {
+            throw new RuntimeException("can't load native libraries " +  Build.CPU_ABI + " lookup folder " + NativeLoader.getAbiFolder());
+        }
         new ForegroundDetector(this) {
             @Override
             public void onActivityStarted(Activity activity) {
@@ -314,9 +388,12 @@ public class ApplicationLoader extends Application {
             logcatFile.delete();
         }
         try {
-            BufferedWriter writer = new BufferedWriter(new FileWriter(logcatFile));
+            FileWriter fileWriter = new FileWriter(logcatFile);
+            BufferedWriter bufferedWriter = new BufferedWriter(fileWriter);
             String logcat = Utilities.readLogcat();
-            writer.write(logcat);
+            bufferedWriter.write(logcat);
+            bufferedWriter.close();
+            fileWriter.close();
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -376,6 +453,13 @@ public class ApplicationLoader extends Application {
             FileLog.e(e);
         }
         return true;
+    }
+
+    private static long lastNetworkCheck = -1;
+    private static void ensureCurrentNetworkGet() {
+        final long now = System.currentTimeMillis();
+        ensureCurrentNetworkGet(now - lastNetworkCheck > 5000);
+        lastNetworkCheck = now;
     }
 
     private static void ensureCurrentNetworkGet(boolean force) {
@@ -617,5 +701,72 @@ public class ApplicationLoader extends Application {
             }
         }
         file.delete();
+    }
+    public static void logDualCamera(boolean success, boolean vendor) {
+        applicationLoaderInstance.logDualCameraInternal(success, vendor);
+    }
+
+    protected void logDualCameraInternal(boolean success, boolean vendor) {
+
+    }
+
+    public boolean checkApkInstallPermissions(final Context context) {
+        return false;
+    }
+
+    public boolean openApkInstall(Activity activity, TLRPC.Document document) {
+        return false;
+    }
+
+    public boolean showUpdateAppPopup(Context context, UpdateData update, int account) {
+        return false;
+    }
+
+    public IUpdateLayout takeUpdateLayout(Activity activity, ViewGroup sideMenu, ViewGroup sideMenuContainer) {
+        return null;
+    }
+
+    public IUpdateButton takeUpdateButton(Context context) {
+        return null;
+    }
+
+    public TLRPC.Update parseTLUpdate(int constructor) {
+        return null;
+    }
+
+    public void processUpdate(int currentAccount, TLRPC.Update update) {
+
+    }
+
+    public boolean onSuggestionFill(String suggestion, CharSequence[] output, boolean[] closeable) {
+        return false;
+    }
+
+    public boolean onSuggestionClick(String suggestion) {
+        return false;
+    }
+
+    public boolean extendDrawer(ArrayList<DrawerLayoutAdapter.Item> items) {
+        return false;
+    }
+
+    public boolean checkRequestPermissionResult(int requestCode, String[] permissions, int[] grantResults) {
+        return false;
+    }
+
+    public boolean consumePush(int account, JSONObject json) {
+        return false;
+    }
+
+    public void onResume() {
+
+    }
+
+    public boolean onPause() {
+        return false;
+    }
+
+    public BaseFragment openSettings(int n) {
+        return null;
     }
 }

@@ -32,11 +32,11 @@ import androidx.core.graphics.ColorUtils;
 import androidx.recyclerview.widget.RecyclerView;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.AnimationNotificationsLocker;
 import org.telegram.messenger.ChatObject;
 import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
-import org.telegram.messenger.NotificationCenter;
 import org.telegram.messenger.R;
 import org.telegram.messenger.UserObject;
 import org.telegram.messenger.support.LongSparseIntArray;
@@ -78,7 +78,7 @@ public class GroupCallRenderersContainer extends FrameLayout {
 
     private LongSparseIntArray attachedPeerIds = new LongSparseIntArray();
 
-    int animationIndex;
+    AnimationNotificationsLocker notificationsLocker = new AnimationNotificationsLocker();
 
     public GroupCallMiniTextureView fullscreenTextureView;
     private GroupCallMiniTextureView outFullscreenTextureView;
@@ -254,7 +254,7 @@ public class GroupCallRenderersContainer extends FrameLayout {
 
         addView(pinContainer);
 
-        pinDrawable = new CrossOutDrawable(context, R.drawable.msg_pin_filled, null);
+        pinDrawable = new CrossOutDrawable(context, R.drawable.msg_pin_filled, -1);
         pinDrawable.setOffsets(-AndroidUtilities.dp(1), AndroidUtilities.dp(2), AndroidUtilities.dp(1));
         pinButton.setImageDrawable(pinDrawable);
         pinButton.setPadding(AndroidUtilities.dp(16), 0, AndroidUtilities.dp(16), 0);
@@ -264,14 +264,14 @@ public class GroupCallRenderersContainer extends FrameLayout {
         pinTextView = new TextView(context);
         pinTextView.setTextColor(Color.WHITE);
         pinTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        pinTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
-        pinTextView.setText(LocaleController.getString("CallVideoPin", R.string.CallVideoPin));
+        pinTextView.setTypeface(AndroidUtilities.bold());
+        pinTextView.setText(LocaleController.getString(R.string.CallVideoPin));
 
         unpinTextView = new TextView(context);
         unpinTextView.setTextColor(Color.WHITE);
         unpinTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
-        unpinTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
-        unpinTextView.setText(LocaleController.getString("CallVideoUnpin", R.string.CallVideoUnpin));
+        unpinTextView.setTypeface(AndroidUtilities.bold());
+        unpinTextView.setText(LocaleController.getString(R.string.CallVideoUnpin));
 
 
         addView(pinTextView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.LEFT | Gravity.TOP));
@@ -956,11 +956,11 @@ public class GroupCallRenderersContainer extends FrameLayout {
             textureViewFinal.animateToFullscreen = true;
             int currentAccount = groupCallActivity.getCurrentAccount();
             swipedBack = swipeToBackGesture;
-            animationIndex = NotificationCenter.getInstance(currentAccount).setAnimationInProgress(animationIndex, null);
+            notificationsLocker.lock();
             fullscreenAnimator.addListener(new AnimatorListenerAdapter() {
                 @Override
                 public void onAnimationEnd(Animator animation) {
-                    NotificationCenter.getInstance(currentAccount).onAnimationFinish(animationIndex);
+                    notificationsLocker.unlock();
                     fullscreenAnimator = null;
                     textureViewFinal.animateToFullscreen = false;
                     if (!inFullscreenMode) {
@@ -1419,13 +1419,13 @@ public class GroupCallRenderersContainer extends FrameLayout {
                     }
                     if (user != null) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            spannableStringBuilder.append(UserObject.getFirstName(user), new TypefaceSpan(AndroidUtilities.getTypeface("fonts/rmedium.ttf")), 0);
+                            spannableStringBuilder.append(UserObject.getFirstName(user), new TypefaceSpan(AndroidUtilities.bold()), 0);
                         } else {
                             spannableStringBuilder.append(UserObject.getFirstName(user));
                         }
                     } else {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                            spannableStringBuilder.append(chat.title, new TypefaceSpan(AndroidUtilities.getTypeface("fonts/rmedium.ttf")), 0);
+                            spannableStringBuilder.append(chat.title, new TypefaceSpan(AndroidUtilities.bold()), 0);
                         } else {
                             spannableStringBuilder.append(chat.title);
                         }

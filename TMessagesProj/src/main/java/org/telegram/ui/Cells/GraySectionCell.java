@@ -21,6 +21,7 @@ import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.LocaleController;
 import org.telegram.ui.ActionBar.Theme;
 import org.telegram.ui.ActionBar.ThemeDescription;
+import org.telegram.ui.Components.AnimatedEmojiSpan;
 import org.telegram.ui.Components.AnimatedTextView;
 import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.LayoutHelper;
@@ -28,11 +29,12 @@ import org.telegram.ui.Components.RecyclerListView;
 
 import java.util.List;
 
-public class GraySectionCell extends FrameLayout {
+public class GraySectionCell extends FrameLayout implements Theme.Colorable {
 
-    private TextView textView;
+    private AnimatedEmojiSpan.TextViewEmojis textView;
     private AnimatedTextView rightTextView;
     private final Theme.ResourcesProvider resourcesProvider;
+    private int layerHeight = 32;
 
     public GraySectionCell(Context context) {
         this(context, null);
@@ -44,9 +46,9 @@ public class GraySectionCell extends FrameLayout {
 
         setBackgroundColor(getThemedColor(Theme.key_graySection));
 
-        textView = new TextView(getContext());
+        textView = new AnimatedEmojiSpan.TextViewEmojis(getContext());
         textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
-        textView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        textView.setTypeface(AndroidUtilities.bold());
         textView.setTextColor(getThemedColor(Theme.key_graySectionText));
         textView.setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
         addView(textView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, (LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.TOP, 16, 0, 16, 0));
@@ -58,7 +60,7 @@ public class GraySectionCell extends FrameLayout {
             }
         };
         rightTextView.setPadding(AndroidUtilities.dp(2), 0, AndroidUtilities.dp(2), 0);
-        rightTextView.setAnimationProperties(1f, 0, 400, CubicBezierInterpolator.EASE_OUT_QUINT);
+        rightTextView.setAnimationProperties(.9f, 0, 420, CubicBezierInterpolator.EASE_OUT_QUINT);
         rightTextView.setTextSize(AndroidUtilities.dp(14));
         rightTextView.setTextColor(getThemedColor(Theme.key_graySectionText));
         rightTextView.setGravity(LocaleController.isRTL ? Gravity.LEFT : Gravity.RIGHT);
@@ -67,12 +69,25 @@ public class GraySectionCell extends FrameLayout {
         ViewCompat.setAccessibilityHeading(this, true);
     }
 
-    @Override
-    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(32), MeasureSpec.EXACTLY));
+    public void updateColors() {
+        setBackgroundColor(getThemedColor(Theme.key_graySection));
+        textView.setTextColor(getThemedColor(Theme.key_graySectionText));
+        rightTextView.setTextColor(getThemedColor(Theme.key_graySectionText));
     }
 
-    public void setTextColor(String key) {
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(
+                MeasureSpec.makeMeasureSpec(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(AndroidUtilities.dp(layerHeight), MeasureSpec.EXACTLY));
+    }
+
+    public void setLayerHeight(int dp){
+        layerHeight = dp;
+        requestLayout();
+    }
+
+    public void setTextColor(int key) {
         int color = getThemedColor(key);
         textView.setTextColor(color);
         rightTextView.setTextColor(color);
@@ -82,13 +97,13 @@ public class GraySectionCell extends FrameLayout {
         return textView.getText();
     }
 
-    public void setText(String text) {
+    public void setText(CharSequence text) {
         textView.setText(text);
         rightTextView.setVisibility(GONE);
         rightTextView.setOnClickListener(null);
     }
 
-    public void setText(String left, String right, OnClickListener onClickListener) {
+    public void setText(CharSequence left, CharSequence right, OnClickListener onClickListener) {
         textView.setText(left);
         rightTextView.setText(right, false);
         rightTextView.setOnClickListener(onClickListener);
@@ -99,8 +114,20 @@ public class GraySectionCell extends FrameLayout {
         setRightText(right, true);
     }
 
-    public void setRightText(String right, boolean moveDown) {
+    public void setRightText(CharSequence right, boolean moveDown) {
         rightTextView.setText(right, true, moveDown);
+        rightTextView.setVisibility(VISIBLE);
+    }
+
+    public void setRightText(CharSequence right, OnClickListener onClickListener) {
+        rightTextView.setText(right, false);
+        rightTextView.setOnClickListener(onClickListener);
+        rightTextView.setVisibility(VISIBLE);
+    }
+
+    public void setRightText(CharSequence right, boolean moveDown, OnClickListener onClickListener) {
+        rightTextView.setText(right, true, moveDown);
+        rightTextView.setOnClickListener(onClickListener);
         rightTextView.setVisibility(VISIBLE);
     }
 
@@ -114,8 +141,7 @@ public class GraySectionCell extends FrameLayout {
         return textView;
     }
 
-    private int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+    private int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 }

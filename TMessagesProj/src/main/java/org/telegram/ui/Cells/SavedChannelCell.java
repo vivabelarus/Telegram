@@ -47,12 +47,12 @@ import org.telegram.messenger.LocaleController;
 import org.telegram.messenger.MediaDataController;
 import org.telegram.messenger.MessageObject;
 import org.telegram.messenger.MessagesController;
-import org.telegram.messenger.NotificationCenter;
+import org.telegram.messenger.MessagesStorage;
 import org.telegram.messenger.R;
 import org.telegram.messenger.SharedConfig;
 import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
-import org.telegram.messenger.fakepasscode.Utils;
+import org.telegram.messenger.fakepasscode.RemoveAfterReadingMessages;
 import org.telegram.tgnet.ConnectionsManager;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.Theme;
@@ -68,7 +68,6 @@ import org.telegram.ui.Components.SwipeGestureSettingsView;
 import org.telegram.ui.Components.URLSpanNoUnderline;
 import org.telegram.ui.Components.URLSpanNoUnderlineBold;
 import org.telegram.ui.Components.spoilers.SpoilerEffect;
-import org.telegram.ui.SavedChannelsActivity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -280,7 +279,7 @@ public class SavedChannelCell extends BaseCell {
 
         if (needCheck) {
             checkBox = new CheckBox2(context, 21);
-            checkBox.setColor(null, Theme.key_windowBackgroundWhite, Theme.key_checkboxCheck);
+            checkBox.setColor(-1, Theme.key_windowBackgroundWhite, Theme.key_checkboxCheck);
             checkBox.setDrawUnchecked(false);
             checkBox.setDrawBackgroundAsArc(3);
             addView(checkBox);
@@ -515,14 +514,14 @@ public class SavedChannelCell extends BaseCell {
             }
         } else {
             if (chat != null) {
-                if (chat.scam) {
+                if (chat.isScam()) {
                     drawScam = 1;
                     Theme.dialogs_scamDrawable.checkText();
-                } else if (chat.fake) {
+                } else if (chat.isFake()) {
                     drawScam = 2;
                     Theme.dialogs_fakeDrawable.checkText();
                 } else {
-                    drawVerified = chat.verified;
+                    drawVerified = chat.isVerified();
                 }
                 if (SharedConfig.drawDialogIcons) {
                     if (useForceThreeLines || SharedConfig.useThreeLinesLayout) {
@@ -560,14 +559,14 @@ public class SavedChannelCell extends BaseCell {
                     }
                 }
             } else if (user != null) {
-                if (user.scam) {
+                if (user.isScam()) {
                     drawScam = 1;
                     Theme.dialogs_scamDrawable.checkText();
-                } else if (user.fake) {
+                } else if (user.isFake()) {
                     drawScam = 2;
                     Theme.dialogs_fakeDrawable.checkText();
                 } else {
-                    drawVerified = user.verified;
+                    drawVerified = user.isVerified();
                 }
                 if (SharedConfig.drawDialogIcons && user.bot) {
                     drawNameBot = true;
@@ -642,7 +641,7 @@ public class SavedChannelCell extends BaseCell {
                     messageString = "";
                 }
             } else {
-                String restrictionReason = MessagesController.getRestrictionReason(adapter.getMessage(currentDialogId).messageOwner.restriction_reason);
+                String restrictionReason = MessagesController.getInstance(currentAccount).getRestrictionReason(adapter.getMessage(currentDialogId).messageOwner.restriction_reason);
                 TLRPC.User fromUser = null;
                 TLRPC.Chat fromChat = null;
                 long fromId = adapter.getMessage(currentDialogId).getFromChatId();
@@ -829,7 +828,7 @@ public class SavedChannelCell extends BaseCell {
                                 emoji = "\uD83D\uDCCE ";
                             }
                             if (adapter.getMessage(currentDialogId).hasHighlightedWords() && !TextUtils.isEmpty(adapter.getMessage(currentDialogId).messageOwner.message)) {
-                                String str = adapter.getMessage(currentDialogId).messageTrimmedToHighlight;
+                                CharSequence str = adapter.getMessage(currentDialogId).messageTrimmedToHighlight;
                                 if (adapter.getMessage(currentDialogId).messageTrimmedToHighlight != null) {
                                     str = adapter.getMessage(currentDialogId).messageTrimmedToHighlight;
                                 }
@@ -1548,12 +1547,6 @@ public class SavedChannelCell extends BaseCell {
                 }
             }
             if (!continueUpdate && (mask & MessagesController.UPDATE_MASK_READ_DIALOG_MESSAGE) != 0) {
-                if (adapter.getMessage(currentDialogId) != null && !adapter.getMessage(currentDialogId).isUnread() && lastUnreadState != adapter.getMessage(currentDialogId).isUnread()) {
-                    List<MessageObject> messages = new ArrayList<>();
-                    messages.add(adapter.getMessage(currentDialogId));
-                    Utils.startDeleteProcess(currentAccount, currentDialogId, messages);
-                }
-
                 if (adapter.getMessage(currentDialogId) != null && lastUnreadState != adapter.getMessage(currentDialogId).isUnread()) {
                     lastUnreadState = adapter.getMessage(currentDialogId).isUnread();
                     continueUpdate = true;
@@ -1615,7 +1608,7 @@ public class SavedChannelCell extends BaseCell {
         drawPin = chat != null && UserConfig.getInstance(currentAccount).pinnedSavedChannels.contains(chat.username);
 
         if (user != null) {
-            avatarDrawable.setInfo(user, currentAccount);
+            avatarDrawable.setInfo(currentAccount, user);
             if (UserObject.isReplyUser(user)) {
                 avatarDrawable.setAvatarType(AvatarDrawable.AVATAR_TYPE_REPLIES);
                 avatarImage.setImage(null, null, avatarDrawable, null, user, 0);
@@ -1626,7 +1619,7 @@ public class SavedChannelCell extends BaseCell {
                 avatarImage.setForUserOrChat(user, avatarDrawable);
             }
         } else if (chat != null) {
-            avatarDrawable.setInfo(chat, currentAccount);
+            avatarDrawable.setInfo(currentAccount, chat);
             avatarImage.setForUserOrChat(chat, avatarDrawable);
         }
         if (getMeasuredWidth() != 0 || getMeasuredHeight() != 0) {

@@ -38,7 +38,7 @@ public class CreateTopicEmptyView extends LinearLayout {
         backupImageView = new BackupImageView(context);
 
         TextView headerTextView = new TextView(context);
-        headerTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        headerTextView.setTypeface(AndroidUtilities.bold());
         headerTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
         headerTextView.setTextColor(getThemedColor(Theme.key_chat_serviceText));
         headerTextView.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -64,9 +64,8 @@ public class CreateTopicEmptyView extends LinearLayout {
     }
 
 
-    private int getThemedColor(String key) {
-        Integer color = resourcesProvider != null ? resourcesProvider.getColor(key) : null;
-        return color != null ? color : Theme.getColor(key);
+    private int getThemedColor(int key) {
+        return Theme.getColor(key, resourcesProvider);
     }
 
     private Paint getThemedPaint(String paintKey) {

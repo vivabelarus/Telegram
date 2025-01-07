@@ -46,12 +46,13 @@ public:
     int64_t getCurrentTimeMillis();
     int64_t getCurrentTimeMonotonicMillis();
     int32_t getCurrentTime();
+    int32_t getCurrentPingTime();
     uint32_t getCurrentDatacenterId();
     bool isTestBackend();
     int32_t getTimeDifference();
-    int32_t sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate);
-    int32_t sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate, int32_t requestToken);
-    void cancelRequest(int32_t token, bool notifyServer);
+    int32_t sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, onRequestClearFunc onClear, uint32_t flags, uint32_t datacenterId, ConnectionType connectionType, bool immediate);
+    int32_t sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, onRequestClearFunc onClear, uint32_t flags, uint32_t datacenterId, ConnectionType connectionType, bool immediate, int32_t requestToken);
+    void cancelRequest(int32_t token, bool notifyServer, onRequestCancelDoneFunc onCancelled);
     void cleanUp(bool resetKeys, int32_t datacenterId);
     void cancelRequestsForGuid(int32_t guid);
     void bindRequestToGuid(int32_t requestToken, int32_t guid);
@@ -59,25 +60,30 @@ public:
     void setDelegate(ConnectiosManagerDelegate *connectiosManagerDelegate);
     ConnectionState getConnectionState();
     void setUserId(int64_t userId);
+    void setUserPremium(bool premium);
     void switchBackend(bool restart);
     void resumeNetwork(bool partial);
     void pauseNetwork();
     void setNetworkAvailable(bool value, int32_t type, bool slow);
     void setIpStrategy(uint8_t value);
-    void init(uint32_t version, int32_t layer, int32_t apiId, std::string deviceModel, std::string systemVersion, std::string appVersion, std::string langCode, std::string systemLangCode, std::string configPath, std::string logPath, std::string regId, std::string cFingerprint, std::string installerId, std::string packageId, int32_t timezoneOffset, int64_t userId, bool isPaused, bool enablePushConnection, bool hasNetwork, int32_t networkType, int32_t performanceClass);
+    void init(uint32_t version, int32_t layer, int32_t apiId, std::string deviceModel, std::string systemVersion, std::string appVersion, std::string langCode, std::string systemLangCode, std::string configPath, std::string logPath, std::string regId, std::string cFingerprint, std::string installerId, std::string packageId, int32_t timezoneOffset, int64_t userId, bool userPremium, bool isPaused, bool enablePushConnection, bool hasNetwork, int32_t networkType, int32_t performanceClass);
     void setProxySettings(std::string address, uint16_t port, std::string username, std::string password, std::string secret);
     void setLangCode(std::string langCode);
     void setRegId(std::string regId);
     void setSystemLangCode(std::string langCode);
-    void updateDcSettings(uint32_t datacenterId, bool workaround);
+    void updateDcSettings(uint32_t datacenterId, bool workaround, bool ifLoadingTryAgain);
     void setPushConnectionEnabled(bool value);
     void applyDnsConfig(NativeByteBuffer *buffer, std::string phone, int32_t date);
     int64_t checkProxy(std::string address, uint16_t port, std::string username, std::string password, std::string secret, onRequestTimeFunc requestTimeFunc, jobject ptr1);
 
 #ifdef ANDROID
-    void sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, onWriteToSocketFunc onWriteToSocket, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate, int32_t requestToken, jobject ptr1, jobject ptr2, jobject ptr3);
+    void sendRequest(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, onWriteToSocketFunc onWriteToSocket, onRequestClearFunc onClear, uint32_t flags, uint32_t datacenterId, ConnectionType connectionType, bool immediate, int32_t requestToken);
     static void useJavaVM(JavaVM *vm, bool useJavaByteBuffers);
 #endif
+
+    void reconnect(int32_t datacentrId, int32_t connectionType);
+    void failNotRunningRequest(int32_t token);
+    void receivedIntegrityCheckClassic(int32_t requestToken, std::string nonce, std::string token);
 
 private:
     static void *ThreadProc(void *data);
@@ -102,9 +108,9 @@ private:
     Datacenter *getDatacenterWithId(uint32_t datacenterId);
     std::unique_ptr<TLObject> wrapInLayer(TLObject *object, Datacenter *datacenter, Request *baseRequest);
     void removeRequestFromGuid(int32_t requestToken);
-    bool cancelRequestInternal(int32_t token, int64_t messageId, bool notifyServer, bool removeFromClass);
+    bool cancelRequestInternal(int32_t token, int64_t messageId, bool notifyServer, bool removeFromClass, onRequestCancelDoneFunc onCancelled);
     int callEvents(int64_t now);
-    int32_t sendRequestInternal(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate);
+    int32_t sendRequestInternal(TLObject *object, onCompleteFunc onComplete, onQuickAckFunc onQuickAck, onRequestClearFunc onClear, uint32_t flags, uint32_t datacenterId, ConnectionType connetionType, bool immediate);
 
     void checkPendingTasks();
     void scheduleTask(std::function<void()> task);
@@ -137,6 +143,7 @@ private:
     std::map<uint32_t, Datacenter *> datacenters;
     std::map<int32_t, std::vector<std::int32_t>> quickAckIdToRequestIds;
     int32_t pingTime;
+    int64_t pingTimeMs;
     bool testBackend = false;
     bool clientBlocked = true;
     std::string lastInitSystemLangcode = "";
@@ -145,12 +152,16 @@ private:
     uint32_t movingToDatacenterId = DEFAULT_DATACENTER_ID;
     int64_t pushSessionId = 0;
     int32_t currentPingTime = 0;
+    int32_t currentPingTimeLive = 0;
     bool registeringForPush = false;
     int64_t lastPushPingTime = 0;
     int32_t nextPingTimeOffset = 60000 * 3;
+    int64_t sendingPushPingTime = 0;
     bool sendingPushPing = false;
     bool sendingPing = false;
     bool updatingDcSettings = false;
+    bool updatingDcSettingsAgain = false;
+    uint32_t updatingDcSettingsAgainDcNum = 0;
     bool updatingDcSettingsWorkaround = false;
     int32_t disconnectTimeoutAmount = 0;
     bool requestingSecondAddressByTlsHashMismatch = false;
@@ -201,6 +212,7 @@ private:
     int *pipeFd = nullptr;
     NativeByteBuffer *networkBuffer;
 
+    requestsList waitingLoginRequests;
     requestsList requestsQueue;
     requestsList runningRequests;
     std::vector<uint32_t> requestingSaltsForDc;
@@ -225,6 +237,7 @@ private:
     std::string currentConfigPath;
     std::string currentLogPath;
     int64_t currentUserId = 0;
+    bool currentUserPremium = false;
     bool registeredForInternalPush = false;
     bool pushConnectionEnabled = true;
     int32_t currentPerformanceClass = -1;
@@ -235,6 +248,7 @@ private:
     std::vector<uint32_t> unknownDatacenterIds;
     std::vector<std::pair<Datacenter *, ConnectionType>> neededDatacenters;
     std::map<uint32_t, uint32_t> downloadRunningRequestCount;
+    std::map<uint32_t, uint32_t> downloadCancelRunningRequestCount;
     std::vector<Datacenter *> unauthorizedDatacenters;
     NativeByteBuffer *sizeCalculator;
 

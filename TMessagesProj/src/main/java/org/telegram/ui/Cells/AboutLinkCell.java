@@ -165,7 +165,7 @@ public class AboutLinkCell extends FrameLayout {
         showMoreTextView.setLines(1);
         showMoreTextView.setMaxLines(1);
         showMoreTextView.setSingleLine(true);
-        showMoreTextView.setText(LocaleController.getString("DescriptionMore", R.string.DescriptionMore));
+        showMoreTextView.setText(LocaleController.getString(R.string.DescriptionMore));
         showMoreTextView.setOnClickListener(e -> {
             updateCollapse(true, true);
         });
@@ -185,6 +185,14 @@ public class AboutLinkCell extends FrameLayout {
         backgroundPaint.setColor(Theme.getColor(Theme.key_windowBackgroundWhite, resourcesProvider));
 
         setWillNotDraw(false);
+    }
+
+    protected int processColor(int color) {
+        return color;
+    }
+
+    public void updateColors() {
+        Theme.profile_aboutTextPaint.linkColor = processColor(Theme.getColor(Theme.key_chat_messageLinkIn, resourcesProvider));
     }
 
     @Override
@@ -244,6 +252,8 @@ public class AboutLinkCell extends FrameLayout {
     private Paint backgroundPaint = new Paint();
     @Override
     public void draw(Canvas canvas) {
+        super.draw(canvas);
+
         View parent = (View) getParent();
         float alpha = parent == null ? 1f : (float) Math.pow(parent.getAlpha(), 2f);
 
@@ -268,8 +278,6 @@ public class AboutLinkCell extends FrameLayout {
         }
 
         container.draw(canvas);
-
-        super.draw(canvas);
     }
 
     final float SPACE = AndroidUtilities.dp(3f);
@@ -283,7 +291,7 @@ public class AboutLinkCell extends FrameLayout {
         canvas.translate(0, textY = AndroidUtilities.dp(8));
 
         try {
-            Theme.profile_aboutTextPaint.linkColor = Theme.getColor(Theme.key_chat_messageLinkIn, resourcesProvider);
+            Theme.profile_aboutTextPaint.linkColor = processColor(Theme.getColor(Theme.key_chat_messageLinkIn, resourcesProvider));
             if (firstThreeLinesLayout == null || !shouldExpand) {
                 if (textLayout != null) {
                     textLayout.draw(canvas);
@@ -312,7 +320,7 @@ public class AboutLinkCell extends FrameLayout {
                             layout.draw(canvas);
                             canvas.restoreToCount(c);
                             x += layout.getLineRight(0) + SPACE;
-                            y += layout.getLineBottom(0) + layout.getTopPadding();
+                            y += layout.getLineBottom(0) + layout.getTopPadding() - 1;
                         }
                     }
                 }
@@ -398,18 +406,18 @@ public class AboutLinkCell extends FrameLayout {
                 ClickableSpan pressedLinkFinal = (ClickableSpan) pressedLink.getSpan();
                 BottomSheet.Builder builder = new BottomSheet.Builder(parentFragment.getParentActivity());
                 builder.setTitle(url);
-                builder.setItems(new CharSequence[]{LocaleController.getString("Open", R.string.Open), LocaleController.getString("Copy", R.string.Copy)}, (dialog, which) -> {
+                builder.setItems(new CharSequence[]{LocaleController.getString(R.string.Open), LocaleController.getString(R.string.Copy)}, (dialog, which) -> {
                     if (which == 0) {
                         onLinkClick(pressedLinkFinal, layout, yOffset);
                     } else if (which == 1) {
                         AndroidUtilities.addToClipboard(url);
                         if (AndroidUtilities.shouldShowClipboardToast()) {
                             if (url.startsWith("@")) {
-                                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.copy, LocaleController.getString("UsernameCopied", R.string.UsernameCopied)).show();
+                                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.copy, LocaleController.getString(R.string.UsernameCopied)).show();
                             } else if (url.startsWith("#") || url.startsWith("$")) {
-                                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.copy, LocaleController.getString("HashtagCopied", R.string.HashtagCopied)).show();
+                                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.copy, LocaleController.getString(R.string.HashtagCopied)).show();
                             } else {
-                                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.copy, LocaleController.getString("LinkCopied", R.string.LinkCopied)).show();
+                                BulletinFactory.of(parentFragment).createSimpleBulletin(R.raw.copy, LocaleController.getString(R.string.LinkCopied)).show();
                             }
                         }
                     }
@@ -461,7 +469,8 @@ public class AboutLinkCell extends FrameLayout {
                 Spannable buffer = (Spannable) textLayout.getText();
                 ClickableSpan[] link = buffer.getSpans(off, off, ClickableSpan.class);
                 if (link.length != 0 && !AndroidUtilities.isAccessibilityScreenReaderEnabled()) {
-                    LinkSpanDrawable linkDrawable = new LinkSpanDrawable(link[0], parentFragment.getResourceProvider(), ex, ey);
+                    LinkSpanDrawable linkDrawable = new LinkSpanDrawable(link[0], resourcesProvider, ex, ey);
+                    linkDrawable.setColor(processColor(Theme.getColor(Theme.key_chat_linkSelectBackground, resourcesProvider)));
                     int start = buffer.getSpanStart(link[0]);
                     int end = buffer.getSpanEnd(link[0]);
                     LinkPath path = linkDrawable.obtainNewPath();
@@ -490,11 +499,12 @@ public class AboutLinkCell extends FrameLayout {
                     links.removeLoading(currentLoading, true);
                 }
                 currentLoading = thisLoading = LinkSpanDrawable.LinkCollector.makeLoading(layout, pressedLink, yOffset);
+                final int color = processColor(Theme.getColor(Theme.key_chat_linkSelectBackground, resourcesProvider));
                 thisLoading.setColors(
-                    Theme.multAlpha(Theme.getColor(Theme.key_chat_linkSelectBackground, resourcesProvider), .8f),
-                    Theme.multAlpha(Theme.getColor(Theme.key_chat_linkSelectBackground, resourcesProvider), 1.3f),
-                    Theme.multAlpha(Theme.getColor(Theme.key_chat_linkSelectBackground, resourcesProvider), 1f),
-                    Theme.multAlpha(Theme.getColor(Theme.key_chat_linkSelectBackground, resourcesProvider), 4f)
+                    Theme.multAlpha(color, .8f),
+                    Theme.multAlpha(color, 1.3f),
+                    Theme.multAlpha(color, 1f),
+                    Theme.multAlpha(color, 4f)
                 );
                 thisLoading.strokePaint.setStrokeWidth(AndroidUtilities.dpf2(1.25f));
                 links.addLoading(thisLoading);
@@ -511,7 +521,7 @@ public class AboutLinkCell extends FrameLayout {
         } : null;
         if (pressedLink instanceof URLSpanNoUnderline) {
             String url = ((URLSpanNoUnderline) pressedLink).getURL();
-            if (url.startsWith("@") || url.startsWith("#") || url.startsWith("/")) {
+            if (url.startsWith("@") || url.startsWith("#") || url.startsWith("$") || url.startsWith("/")) {
                 didPressUrl(url, currentProgress);
             }
         } else {
@@ -672,8 +682,8 @@ public class AboutLinkCell extends FrameLayout {
 
     private StaticLayout makeTextLayout(CharSequence string, int width) {
         if (Build.VERSION.SDK_INT >= 24) {
-            return StaticLayout.Builder.obtain(string, 0, string.length(), Theme.profile_aboutTextPaint, width)
-                    .setBreakStrategy(StaticLayout.BREAK_STRATEGY_HIGH_QUALITY)
+            return StaticLayout.Builder.obtain(string, 0, string.length(), Theme.profile_aboutTextPaint, Math.max(1, width))
+                    .setBreakStrategy(StaticLayout.BREAK_STRATEGY_SIMPLE)
                     .setHyphenationFrequency(StaticLayout.HYPHENATION_FREQUENCY_NONE)
                     .setAlignment(LocaleController.isRTL ? StaticLayoutEx.ALIGN_RIGHT() : StaticLayoutEx.ALIGN_LEFT())
                     .build();

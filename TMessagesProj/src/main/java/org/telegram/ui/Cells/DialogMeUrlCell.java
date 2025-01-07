@@ -104,7 +104,7 @@ public class DialogMeUrlCell extends BaseCell {
 
         if (recentMeUrl instanceof TLRPC.TL_recentMeUrlChat) {
             TLRPC.Chat chat = MessagesController.getInstance(currentAccount).getChat(recentMeUrl.chat_id);
-            drawVerified = chat.verified;
+            drawVerified = chat.isVerified();
 
             if (!LocaleController.isRTL) {
                 nameLockLeft = AndroidUtilities.dp(AndroidUtilities.leftBaseline);
@@ -114,7 +114,7 @@ public class DialogMeUrlCell extends BaseCell {
                 nameLeft = AndroidUtilities.dp(14);
             }
             nameString = UserConfig.getChatTitleOverride(currentAccount, chat);
-            avatarDrawable.setInfo(chat, currentAccount);
+            avatarDrawable.setInfo(currentAccount, chat);
             avatarImage.setForUserOrChat(chat, avatarDrawable, recentMeUrl);
         } else if (recentMeUrl instanceof TLRPC.TL_recentMeUrlUser) {
             TLRPC.User user = MessagesController.getInstance(currentAccount).getUser(recentMeUrl.user_id);
@@ -134,10 +134,10 @@ public class DialogMeUrlCell extends BaseCell {
                         nameLeft = AndroidUtilities.dp(14);
                     }
                 }
-                drawVerified = user.verified;
+                drawVerified = user.isVerified();
             }
             nameString = UserObject.getUserName(user, currentAccount);
-            avatarDrawable.setInfo(user, currentAccount);
+            avatarDrawable.setInfo(currentAccount, user);
             avatarImage.setForUserOrChat(user, avatarDrawable, recentMeUrl);
         } else if (recentMeUrl instanceof TLRPC.TL_recentMeUrlStickerSet) {
             if (!LocaleController.isRTL) {
@@ -155,9 +155,9 @@ public class DialogMeUrlCell extends BaseCell {
                 nameLeft = AndroidUtilities.dp(14);
             }
             if (recentMeUrl.chat_invite.chat != null) {
-                avatarDrawable.setInfo(recentMeUrl.chat_invite.chat, currentAccount);
+                avatarDrawable.setInfo(currentAccount, recentMeUrl.chat_invite.chat);
                 nameString = UserConfig.getChatTitleOverride(currentAccount, recentMeUrl.chat_invite.chat);
-                drawVerified = recentMeUrl.chat_invite.chat.verified;
+                drawVerified = recentMeUrl.chat_invite.chat.isVerified();
                 avatarImage.setForUserOrChat(recentMeUrl.chat_invite.chat, avatarDrawable, recentMeUrl);
             } else {
                 nameString = recentMeUrl.chat_invite.title;
@@ -186,7 +186,7 @@ public class DialogMeUrlCell extends BaseCell {
         messageString = MessagesController.getInstance(currentAccount).linkPrefix + "/" + recentMeUrl.url;
 
         if (TextUtils.isEmpty(nameString)) {
-            nameString = LocaleController.getString("HiddenName", R.string.HiddenName);
+            nameString = LocaleController.getString(R.string.HiddenName);
         }
 
         int nameWidth;

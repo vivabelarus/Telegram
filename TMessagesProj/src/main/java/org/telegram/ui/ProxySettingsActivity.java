@@ -66,7 +66,6 @@ import org.telegram.ui.Components.CubicBezierInterpolator;
 import org.telegram.ui.Components.EditTextBoldCursor;
 import org.telegram.ui.Components.LayoutHelper;
 import org.telegram.ui.Components.QRCodeBottomSheet;
-import org.telegram.ui.Components.RLottieDrawable;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
@@ -195,7 +194,7 @@ public class ProxySettingsActivity extends BaseFragment {
 
     @Override
     public View createView(Context context) {
-        actionBar.setTitle(LocaleController.getString("ProxyDetails", R.string.ProxyDetails));
+        actionBar.setTitle(LocaleController.getString(R.string.ProxyDetails));
         actionBar.setBackButtonImage(R.drawable.ic_ab_back);
         actionBar.setAllowOverlayTitle(false);
         if (AndroidUtilities.isTablet()) {
@@ -253,7 +252,7 @@ public class ProxySettingsActivity extends BaseFragment {
         });
 
         doneItem = actionBar.createMenu().addItemWithWidth(done_button, R.drawable.ic_ab_done, AndroidUtilities.dp(56));
-        doneItem.setContentDescription(LocaleController.getString("Done", R.string.Done));
+        doneItem.setContentDescription(LocaleController.getString(R.string.Done));
 
         fragmentView = new FrameLayout(context);
         FrameLayout frameLayout = (FrameLayout) fragmentView;
@@ -275,9 +274,9 @@ public class ProxySettingsActivity extends BaseFragment {
             typeCell[a].setBackground(Theme.getSelectorDrawable(true));
             typeCell[a].setTag(a);
             if (a == 0) {
-                typeCell[a].setText(LocaleController.getString("UseProxySocks5", R.string.UseProxySocks5), a == currentType, true);
+                typeCell[a].setText(LocaleController.getString(R.string.UseProxySocks5), a == currentType, true);
             } else {
-                typeCell[a].setText(LocaleController.getString("UseProxyTelegram", R.string.UseProxyTelegram), a == currentType, false);
+                typeCell[a].setText(LocaleController.getString(R.string.UseProxyTelegram), a == currentType, false);
             }
             linearLayout2.addView(typeCell[a], LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, 50));
             typeCell[a].setOnClickListener(typeCellClickListener);
@@ -314,7 +313,7 @@ public class ProxySettingsActivity extends BaseFragment {
             inputFields[a].setGravity((LocaleController.isRTL ? Gravity.RIGHT : Gravity.LEFT) | Gravity.CENTER_VERTICAL);
             inputFields[a].setHeaderHintColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueHeader));
             inputFields[a].setTransformHintToHeader(true);
-            inputFields[a].setLineColors(Theme.getColor(Theme.key_windowBackgroundWhiteInputField), Theme.getColor(Theme.key_windowBackgroundWhiteInputFieldActivated), Theme.getColor(Theme.key_windowBackgroundWhiteRedText3));
+            inputFields[a].setLineColors(Theme.getColor(Theme.key_windowBackgroundWhiteInputField), Theme.getColor(Theme.key_windowBackgroundWhiteInputFieldActivated), Theme.getColor(Theme.key_text_RedRegular));
 
             if (a == FIELD_IP) {
                 inputFields[a].setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_URI);
@@ -393,23 +392,23 @@ public class ProxySettingsActivity extends BaseFragment {
             inputFields[a].setImeOptions(EditorInfo.IME_ACTION_NEXT | EditorInfo.IME_FLAG_NO_EXTRACT_UI);
             switch (a) {
                 case FIELD_IP:
-                    inputFields[a].setHintText(LocaleController.getString("UseProxyAddress", R.string.UseProxyAddress));
+                    inputFields[a].setHintText(LocaleController.getString(R.string.UseProxyAddress));
                     inputFields[a].setText(currentProxyInfo.address);
                     break;
                 case FIELD_PASSWORD:
-                    inputFields[a].setHintText(LocaleController.getString("UseProxyPassword", R.string.UseProxyPassword));
+                    inputFields[a].setHintText(LocaleController.getString(R.string.UseProxyPassword));
                     inputFields[a].setText(currentProxyInfo.password);
                     break;
                 case FIELD_PORT:
-                    inputFields[a].setHintText(LocaleController.getString("UseProxyPort", R.string.UseProxyPort));
+                    inputFields[a].setHintText(LocaleController.getString(R.string.UseProxyPort));
                     inputFields[a].setText("" + currentProxyInfo.port);
                     break;
                 case FIELD_USER:
-                    inputFields[a].setHintText(LocaleController.getString("UseProxyUsername", R.string.UseProxyUsername));
+                    inputFields[a].setHintText(LocaleController.getString(R.string.UseProxyUsername));
                     inputFields[a].setText(currentProxyInfo.username);
                     break;
                 case FIELD_SECRET:
-                    inputFields[a].setHintText(LocaleController.getString("UseProxySecret", R.string.UseProxySecret));
+                    inputFields[a].setHintText(LocaleController.getString(R.string.UseProxySecret));
                     inputFields[a].setText(currentProxyInfo.secret);
                     break;
             }
@@ -436,11 +435,11 @@ public class ProxySettingsActivity extends BaseFragment {
 
         for (int i = 0; i < 2; i++) {
             bottomCells[i] = new TextInfoPrivacyCell(context);
-            bottomCells[i].setBackground(Theme.getThemedDrawable(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+            bottomCells[i].setBackground(Theme.getThemedDrawableByKey(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
             if (i == 0) {
-                bottomCells[i].setText(LocaleController.getString("UseProxyInfo", R.string.UseProxyInfo));
+                bottomCells[i].setText(LocaleController.getString(R.string.UseProxyInfo));
             } else {
-                bottomCells[i].setText(LocaleController.getString("UseProxyTelegramInfo", R.string.UseProxyTelegramInfo) + "\n\n" + LocaleController.getString("UseProxyTelegramInfo2", R.string.UseProxyTelegramInfo2));
+                bottomCells[i].setText(LocaleController.getString(R.string.UseProxyTelegramInfo) + "\n\n" + LocaleController.getString(R.string.UseProxyTelegramInfo2));
                 bottomCells[i].setVisibility(View.GONE);
             }
             linearLayout2.addView(bottomCells[i], LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
@@ -448,7 +447,7 @@ public class ProxySettingsActivity extends BaseFragment {
 
         pasteCell = new TextSettingsCell(fragmentView.getContext());
         pasteCell.setBackground(Theme.getSelectorDrawable(true));
-        pasteCell.setText(LocaleController.getString("PasteFromClipboard", R.string.PasteFromClipboard), false);
+        pasteCell.setText(LocaleController.getString(R.string.PasteFromClipboard), false);
         pasteCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
         pasteCell.setOnClickListener(v -> {
             if (pasteType != -1) {
@@ -487,13 +486,13 @@ public class ProxySettingsActivity extends BaseFragment {
         linearLayout2.addView(pasteCell, 0, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         pasteCell.setVisibility(View.GONE);
         sectionCell[2] = new ShadowSectionCell(fragmentView.getContext());
-        sectionCell[2].setBackground(Theme.getThemedDrawable(fragmentView.getContext(), R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+        sectionCell[2].setBackground(Theme.getThemedDrawableByKey(fragmentView.getContext(), R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
         linearLayout2.addView(sectionCell[2], 1, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         sectionCell[2].setVisibility(View.GONE);
 
         shareCell = new TextSettingsCell(context);
         shareCell.setBackgroundDrawable(Theme.getSelectorDrawable(true));
-        shareCell.setText(LocaleController.getString("ShareFile", R.string.ShareFile), false);
+        shareCell.setText(LocaleController.getString(R.string.ShareFile), false);
         shareCell.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText4));
         linearLayout2.addView(shareCell, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
         shareCell.setOnClickListener(v -> {
@@ -542,14 +541,14 @@ public class ProxySettingsActivity extends BaseFragment {
                 return;
             }
             String link = url + params.toString();
-            QRCodeBottomSheet alert = new QRCodeBottomSheet(context, LocaleController.getString("ShareQrCode", R.string.ShareQrCode), link, LocaleController.getString("QRCodeLinkHelpProxy", R.string.QRCodeLinkHelpProxy), true);
-            Bitmap icon = SvgHelper.getBitmap(RLottieDrawable.readRes(null, R.raw.qr_dog), AndroidUtilities.dp(60), AndroidUtilities.dp(60), false);
+            QRCodeBottomSheet alert = new QRCodeBottomSheet(context, LocaleController.getString(R.string.ShareQrCode), link, LocaleController.getString(R.string.QRCodeLinkHelpProxy), true);
+            Bitmap icon = SvgHelper.getBitmap(AndroidUtilities.readRes(R.raw.qr_dog), AndroidUtilities.dp(60), AndroidUtilities.dp(60), false);
             alert.setCenterImage(icon);
             showDialog(alert);
         });
 
         sectionCell[1] = new ShadowSectionCell(context);
-        sectionCell[1].setBackgroundDrawable(Theme.getThemedDrawable(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
+        sectionCell[1].setBackgroundDrawable(Theme.getThemedDrawableByKey(context, R.drawable.greydivider_bottom, Theme.key_windowBackgroundGrayShadow));
         linearLayout2.addView(sectionCell[1], LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT));
 
         clipboardManager = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
@@ -774,7 +773,7 @@ public class ProxySettingsActivity extends BaseFragment {
                 for (int i = 0; i < inputFields.length; i++) {
                     inputFields[i].setLineColors(Theme.getColor(Theme.key_windowBackgroundWhiteInputField),
                             Theme.getColor(Theme.key_windowBackgroundWhiteInputFieldActivated),
-                            Theme.getColor(Theme.key_windowBackgroundWhiteRedText3));
+                            Theme.getColor(Theme.key_text_RedRegular));
                 }
             }
         };
@@ -815,7 +814,7 @@ public class ProxySettingsActivity extends BaseFragment {
                 arrayList.add(new ThemeDescription(inputFields[a], ThemeDescription.FLAG_CURSORCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlackText));
                 arrayList.add(new ThemeDescription(null, 0, null, null, null, delegate, Theme.key_windowBackgroundWhiteInputField));
                 arrayList.add(new ThemeDescription(null, 0, null, null, null, delegate, Theme.key_windowBackgroundWhiteInputFieldActivated));
-                arrayList.add(new ThemeDescription(null, 0, null, null, null, delegate, Theme.key_windowBackgroundWhiteRedText3));
+                arrayList.add(new ThemeDescription(null, 0, null, null, null, delegate, Theme.key_text_RedRegular));
             }
         } else {
             arrayList.add(new ThemeDescription(null, ThemeDescription.FLAG_TEXTCOLOR, null, null, null, null, Theme.key_windowBackgroundWhiteBlackText));

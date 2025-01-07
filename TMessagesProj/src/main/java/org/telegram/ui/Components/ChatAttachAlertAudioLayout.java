@@ -90,7 +90,11 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     private float currentPanTranslationProgress;
 
     public interface AudioSelectDelegate {
-        void didSelectAudio(ArrayList<MessageObject> audios, CharSequence caption, boolean notify, int scheduleDate);
+        default void didSelectAudio(ArrayList<MessageObject> audios, CharSequence caption, boolean notify, int scheduleDate, long effectId, boolean invertMedia) {
+            didSelectAudio(audios, caption, notify, scheduleDate, effectId, invertMedia, null);
+        }
+
+        void didSelectAudio(ArrayList<MessageObject> audios, CharSequence caption, boolean notify, int scheduleDate, long effectId, boolean invertMedia, Integer autoDeleteDelay);
     }
 
     public ChatAttachAlertAudioLayout(ChatAttachAlert alert, Context context, Theme.ResourcesProvider resourcesProvider) {
@@ -138,7 +142,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
                 parentAlert.makeFocusable(editText, true);
             }
         };
-        searchField.setHint(LocaleController.getString("SearchMusic", R.string.SearchMusic));
+        searchField.setHint(LocaleController.getString(R.string.SearchMusic));
         frameLayout.addView(searchField, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT, Gravity.TOP | Gravity.LEFT));
 
         progressView = new EmptyTextProgressView(context, null, resourcesProvider);
@@ -160,7 +164,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
         emptyTitleTextView = new TextView(context);
         emptyTitleTextView.setTextColor(getThemedColor(Theme.key_dialogEmptyText));
         emptyTitleTextView.setGravity(Gravity.CENTER);
-        emptyTitleTextView.setTypeface(AndroidUtilities.getTypeface("fonts/rmedium.ttf"));
+        emptyTitleTextView.setTypeface(AndroidUtilities.bold());
         emptyTitleTextView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 17);
         emptyTitleTextView.setPadding(AndroidUtilities.dp(40), 0, AndroidUtilities.dp(40), 0);
         emptyView.addView(emptyTitleTextView, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER, 0, 11, 0, 0));
@@ -233,7 +237,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    void onDestroy() {
+    public void onDestroy() {
         onHide();
         NotificationCenter.getInstance(parentAlert.currentAccount).removeObserver(this, NotificationCenter.messagePlayingDidReset);
         NotificationCenter.getInstance(parentAlert.currentAccount).removeObserver(this, NotificationCenter.messagePlayingDidStart);
@@ -241,7 +245,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    void onHide() {
+    public void onHide() {
         if (playingAudio != null && MediaController.getInstance().isPlayingMessage(playingAudio)) {
             MediaController.getInstance().cleanupPlayer(true, true);
         }
@@ -265,10 +269,10 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
             emptyView.setVisibility(View.GONE);
         } else {
             if (listView.getAdapter() == searchAdapter) {
-                emptyTitleTextView.setText(LocaleController.getString("NoAudioFound", R.string.NoAudioFound));
+                emptyTitleTextView.setText(LocaleController.getString(R.string.NoAudioFound));
             } else {
-                emptyTitleTextView.setText(LocaleController.getString("NoAudioFiles", R.string.NoAudioFiles));
-                emptySubtitleTextView.setText(LocaleController.getString("NoAudioFilesInfo", R.string.NoAudioFilesInfo));
+                emptyTitleTextView.setText(LocaleController.getString(R.string.NoAudioFiles));
+                emptySubtitleTextView.setText(LocaleController.getString(R.string.NoAudioFilesInfo));
             }
             currentEmptyView = emptyView;
             progressView.setVisibility(View.GONE);
@@ -289,12 +293,12 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    void scrollToTop() {
+    public void scrollToTop() {
         listView.smoothScrollToPosition(0);
     }
 
     @Override
-    int getCurrentItemTop() {
+    public int getCurrentItemTop() {
         if (listView.getChildCount() <= 0) {
             return Integer.MAX_VALUE;
         }
@@ -313,7 +317,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    int getFirstOffset() {
+    public int getFirstOffset() {
         return getListTopPadding() + AndroidUtilities.dp(4);
     }
 
@@ -324,7 +328,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    boolean onDismiss() {
+    public boolean onDismiss() {
         if (playingAudio != null && MediaController.getInstance().isPlayingMessage(playingAudio)) {
             MediaController.getInstance().cleanupPlayer(true, true);
         }
@@ -332,7 +336,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    int getListTopPadding() {
+    public int getListTopPadding() {
         return listView.getPaddingTop();
     }
 
@@ -343,7 +347,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    void onPreMeasure(int availableWidth, int availableHeight) {
+    public void onPreMeasure(int availableWidth, int availableHeight) {
         int padding;
         if (parentAlert.sizeNotifierFrameLayout.measureKeyboardHeight() > AndroidUtilities.dp(20)) {
             padding = AndroidUtilities.dp(8);
@@ -364,13 +368,13 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    void onShow(ChatAttachAlert.AttachAlertLayout previousLayout) {
+    public void onShow(ChatAttachAlert.AttachAlertLayout previousLayout) {
         layoutManager.scrollToPositionWithOffset(0, 0);
         listAdapter.notifyDataSetChanged();
     }
 
     @Override
-    void onHidden() {
+    public void onHidden() {
         selectedAudios.clear();
         selectedAudiosOrder.clear();
     }
@@ -453,7 +457,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     private void showErrorBox(String error) {
-        new AlertDialog.Builder(getContext(), resourcesProvider).setTitle(LocaleController.getString("AppName", R.string.AppName)).setMessage(error).setPositiveButton(LocaleController.getString("OK", R.string.OK), null).show();
+        new AlertDialog.Builder(getContext(), resourcesProvider).setTitle(LocaleController.getString(R.string.AppName)).setMessage(error).setPositiveButton(LocaleController.getString(R.string.OK), null).show();
     }
 
     private void onItemClick(View view) {
@@ -463,7 +467,13 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
         SharedAudioCell audioCell = (SharedAudioCell) view;
         MediaController.AudioEntry audioEntry = (MediaController.AudioEntry) audioCell.getTag();
         boolean add;
-        if (selectedAudios.indexOfKey(audioEntry.id) >= 0) {
+        if (parentAlert.isStoryAudioPicker) {
+            sendPressed = true;
+            ArrayList<MessageObject> audios = new ArrayList<>();
+            audios.add(audioEntry.messageObject);
+            delegate.didSelectAudio(audios, parentAlert.getCommentView().getText(), false, 0, 0, false);
+            add = true;
+        } else if (selectedAudios.indexOfKey(audioEntry.id) >= 0) {
             selectedAudios.remove(audioEntry.id);
             selectedAudiosOrder.remove(audioEntry);
             audioCell.setChecked(false, true);
@@ -482,12 +492,12 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    int getSelectedItemsCount() {
+    public int getSelectedItemsCount() {
         return selectedAudios.size();
     }
 
     @Override
-    void sendSelectedItems(boolean notify, int scheduleDate) {
+    public void sendSelectedItems(boolean notify, int scheduleDate, long effectId, boolean invertMedia, Integer autoDeleteDelay) {
         if (selectedAudios.size() == 0 || delegate == null || sendPressed) {
             return;
         }
@@ -496,7 +506,15 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
         for (int a = 0; a < selectedAudiosOrder.size(); a++) {
             audios.add(selectedAudiosOrder.get(a).messageObject);
         }
-        delegate.didSelectAudio(audios, parentAlert.commentTextView.getText(), notify, scheduleDate);
+        delegate.didSelectAudio(audios, parentAlert.getCommentView().getText(), notify, scheduleDate, effectId, invertMedia, autoDeleteDelay);
+    }
+
+    public ArrayList<MessageObject> getSelected() {
+        ArrayList<MessageObject> audios = new ArrayList<>();
+        for (int a = 0; a < selectedAudiosOrder.size(); a++) {
+            audios.add(selectedAudiosOrder.get(a).messageObject);
+        }
+        return audios;
     }
 
     public void setDelegate(AudioSelectDelegate audioSelectDelegate) {
@@ -821,7 +839,7 @@ public class ChatAttachAlertAudioLayout extends ChatAttachAlert.AttachAlertLayou
     }
 
     @Override
-    void onContainerTranslationUpdated(float currentPanTranslationY) {
+    public void onContainerTranslationUpdated(float currentPanTranslationY) {
         this.currentPanTranslationProgress = currentPanTranslationY;
         super.onContainerTranslationUpdated(currentPanTranslationY);
         updateEmptyViewPosition();

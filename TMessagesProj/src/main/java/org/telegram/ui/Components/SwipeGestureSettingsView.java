@@ -42,7 +42,7 @@ public class SwipeGestureSettingsView extends FrameLayout {
     private NumberPicker picker;
 
     String[] strings = new String[6];
-    String[] backgroundKeys = new String[6];
+    int[] backgroundKeys = new int[6];
     RLottieDrawable[] icons = new RLottieDrawable[6];
 
     int currentIconIndex;
@@ -52,18 +52,18 @@ public class SwipeGestureSettingsView extends FrameLayout {
     float progressToSwipeFolders;
     float colorProgress = 1f;
     int fromColor;
-    String currentColorKey;
+    int currentColorKey;
 
 
     public SwipeGestureSettingsView(Context context, int currentAccount) {
         super(context);
 
-        strings[SWIPE_GESTURE_PIN] = LocaleController.getString("SwipeSettingsPin", R.string.SwipeSettingsPin);
-        strings[SWIPE_GESTURE_READ] = LocaleController.getString("SwipeSettingsRead", R.string.SwipeSettingsRead);
-        strings[SWIPE_GESTURE_ARCHIVE] = LocaleController.getString("SwipeSettingsArchive", R.string.SwipeSettingsArchive);
-        strings[SWIPE_GESTURE_MUTE] = LocaleController.getString("SwipeSettingsMute", R.string.SwipeSettingsMute);
-        strings[SWIPE_GESTURE_DELETE] = LocaleController.getString("SwipeSettingsDelete", R.string.SwipeSettingsDelete);
-        strings[SWIPE_GESTURE_FOLDERS] = LocaleController.getString("SwipeSettingsFolders", R.string.SwipeSettingsFolders);
+        strings[SWIPE_GESTURE_PIN] = LocaleController.getString(R.string.SwipeSettingsPin);
+        strings[SWIPE_GESTURE_READ] = LocaleController.getString(R.string.SwipeSettingsRead);
+        strings[SWIPE_GESTURE_ARCHIVE] = LocaleController.getString(R.string.SwipeSettingsArchive);
+        strings[SWIPE_GESTURE_MUTE] = LocaleController.getString(R.string.SwipeSettingsMute);
+        strings[SWIPE_GESTURE_DELETE] = LocaleController.getString(R.string.SwipeSettingsDelete);
+        strings[SWIPE_GESTURE_FOLDERS] = LocaleController.getString(R.string.SwipeSettingsFolders);
 
         backgroundKeys[SWIPE_GESTURE_PIN] = Theme.key_chats_archiveBackground;
         backgroundKeys[SWIPE_GESTURE_READ] = Theme.key_chats_archiveBackground;
@@ -209,12 +209,12 @@ public class SwipeGestureSettingsView extends FrameLayout {
 
 
         int color;
-        if (currentColorKey == null) {
+        if (currentColorKey < 0) {
             currentColorKey = backgroundKeys[picker.getValue()];
             colorProgress = 1f;
             color = ColorUtils.blendARGB(Theme.getColor(Theme.key_windowBackgroundWhite), Theme.getColor(currentColorKey), 0.9f);
             fromColor = color;
-        } else if (!backgroundKeys[picker.getValue()].equals(currentColorKey)) {
+        } else if (backgroundKeys[picker.getValue()] != currentColorKey) {
             fromColor = ColorUtils.blendARGB(fromColor, ColorUtils.blendARGB(Theme.getColor(Theme.key_windowBackgroundWhite), Theme.getColor(currentColorKey), 0.9f), colorProgress);
             colorProgress = 0;
             currentColorKey = backgroundKeys[picker.getValue()];
